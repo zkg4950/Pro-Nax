@@ -27,6 +27,7 @@ interface HeaderProps {
   onOpenUploadModal: () => void;
   onOpenLiveControlRoom?: () => void;
   onOpenAIAssistant: () => void;
+  onOpenLivingAICompanion?: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   sessionTimeoutWarning?: boolean;
@@ -40,6 +41,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenUploadModal,
   onOpenLiveControlRoom,
   onOpenAIAssistant,
+  onOpenLivingAICompanion,
   searchQuery,
   onSearchChange,
   sessionTimeoutWarning,
@@ -169,6 +171,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="hidden sm:inline">Studio AI Coach</span>
                   <span className="sm:hidden text-[10px]">AI</span>
                 </button>
+
+                {/* Living AI Companion Button */}
+                {onOpenLivingAICompanion && (
+                  <button
+                    onClick={onOpenLivingAICompanion}
+                    className="flex items-center gap-1.5 rounded-full border border-cyan-500/50 bg-cyan-600/20 px-2.5 sm:px-3.5 py-1.5 text-xs font-semibold text-cyan-400 hover:bg-cyan-600/30 transition-all active:scale-95"
+                    title="Living AI Companion - Vision + Voice"
+                  >
+                    <Radio className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Living AI</span>
+                  </button>
+                )}
 
                 {/* Create Dropdown */}
                 <div className="relative">

@@ -22,6 +22,8 @@ import { LiveControlRoomModal } from "./components/LiveControlRoomModal";
 import { CopyrightClaimModal } from "./components/CopyrightClaimModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { AIAssistantDrawer } from "./components/AIAssistantDrawer";
+import { AICopilotProvider } from "./components/ai-copilot/AICopilotContext";
+import { LivingAICompanion } from "./components/ai-copilot/LivingAICompanion";
 
 import { ViewMode, Video, AudioTrack, ChannelStats, SubtitleTrack } from "./types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -110,6 +112,7 @@ export default function App() {
   const [isLiveControlRoomOpen, setIsLiveControlRoomOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const [isLivingAICompanionOpen, setIsLivingAICompanionOpen] = useState(false);
 
 
   // Handlers
@@ -219,7 +222,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f0f] text-gray-100 flex flex-col font-sans antialiased selection:bg-red-500 selection:text-white">
+    <AICopilotProvider>
+      <div className="min-h-screen bg-[#0f0f0f] text-gray-100 flex flex-col font-sans antialiased selection:bg-red-500 selection:text-white">
       {/* Hidden File Picker Input for direct Gallery/Browser selection */}
       <input
         type="file"
@@ -237,6 +241,7 @@ export default function App() {
         onOpenUploadModal={handleTriggerUpload}
         onOpenLiveControlRoom={() => setIsLiveControlRoomOpen(true)}
         onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
+        onOpenLivingAICompanion={() => setIsLivingAICompanionOpen(true)}
         searchQuery={globalSearch}
         onSearchChange={setGlobalSearch}
       />
@@ -491,11 +496,19 @@ export default function App() {
         onClose={() => setIsAIAssistantOpen(false)}
       />
 
+      {/* Living AI Companion Modal */}
+      <LivingAICompanion
+        isOpen={isLivingAICompanionOpen}
+        onClose={() => setIsLivingAICompanionOpen(false)}
+        channelStats={safeChannelStats}
+      />
+
       {/* Universal Login Modal */}
       <UniversalLoginModal 
         isOpen={isAuthModalOpen}
         onClose={closeAuthModal}
       />
     </div>
+    </AICopilotProvider>
   );
 }
