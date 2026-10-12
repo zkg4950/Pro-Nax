@@ -13,6 +13,7 @@ export const LANGUAGES = [
   { code: 'ar', name: 'Arabic', native: 'العربية' },
   { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
   { code: 'ur', name: 'Urdu', native: 'اردو' },
+  { code: 'skr', name: 'Saraiki', native: 'سرائیکی' },
   { code: 'bn', name: 'Bengali', native: 'বাংলা' },
   { code: 'tr', name: 'Turkish', native: 'Türkçe' },
   { code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt' },

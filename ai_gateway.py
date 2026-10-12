@@ -105,7 +105,7 @@ def health_check():
 # Creator Coach endpoint (LangGraph)
 @app.route('/api/ai/creator-coach', methods=['POST'])
 def creator_coach():
-    """Execute LangGraph Creator Coach workflow"""
+    """Execute LangGraph Creator Coach workflow with multi-language support"""
     try:
         data = request.json
         langgraph_health = check_langgraph_health()
@@ -117,10 +117,18 @@ def creator_coach():
                 "fallback": "Ensure LangGraph server is running on port " + LANGGRAPH_PORT
             }), 503
         
+        # Extract language and system prompt
+        language = data.get("language", "en")
+        system_prompt = data.get("system_prompt", "You are a helpful AI assistant.")
+        
+        # Add language instruction to the request
+        enhanced_data = data.copy()
+        enhanced_data["system_prompt"] = f"{system_prompt} Respond in {language} language."
+        
         # Forward to LangGraph server
         response = requests.post(
             f"http://localhost:{LANGGRAPH_PORT}/api/generate",
-            json=data,
+            json=enhanced_data,
             timeout=60
         )
         
@@ -141,12 +149,13 @@ def creator_coach():
 # Video Metadata endpoint (CrewAI Video Assistant)
 @app.route('/api/ai/video-metadata', methods=['POST'])
 def video_metadata():
-    """Execute CrewAI Video Assistant for title, description, tags"""
+    """Execute CrewAI Video Assistant for title, description, tags with multi-language support"""
     try:
         data = request.json
         video_title = data.get("video_title", "")
         category = data.get("category", "")
         content = data.get("content", "")
+        language = data.get("language", "en")
         
         if not video_title:
             return jsonify({
@@ -154,13 +163,18 @@ def video_metadata():
                 "error": "video_title is required"
             }), 400
         
+        # Add language instruction to content
+        language_instruction = f"Generate all metadata (title, description, tags) in {language} language."
+        enhanced_content = f"{content}\n\n{language_instruction}"
+        
         # Call CrewAI script
         result = subprocess.run(
             ["python", "crewai_video_assistant.py"],
             input=json.dumps({
                 "video_title": video_title,
                 "category": category,
-                "content": content
+                "content": enhanced_content,
+                "language": language
             }),
             capture_output=True,
             text=True,
@@ -171,7 +185,8 @@ def video_metadata():
             return jsonify({
                 "success": True,
                 "data": result.stdout,
-                "raw_output": result.stdout
+                "raw_output": result.stdout,
+                "language": language
             })
         else:
             return jsonify({
@@ -193,10 +208,11 @@ def video_metadata():
 # Admin Decision endpoint (CrewAI Admin Brain)
 @app.route('/api/ai/admin-decision', methods=['POST'])
 def admin_decision():
-    """Execute CrewAI Admin Brain for admin decisions"""
+    """Execute CrewAI Admin Brain for admin decisions with multi-language support"""
     try:
         data = request.json
         task_type = data.get("task_type", "full_check")
+        language = data.get("language", "en")
         
         # Call appropriate CrewAI script
         if task_type == "full_check":
@@ -208,18 +224,24 @@ def admin_decision():
         else:
             script = "crewai_admin_system.py"
         
+        # Add language instruction via environment
+        env = os.environ.copy()
+        env["RESPONSE_LANGUAGE"] = language
+        
         result = subprocess.run(
             ["python", script],
             capture_output=True,
             text=True,
-            timeout=180
+            timeout=180,
+            env=env
         )
         
         if result.returncode == 0:
             return jsonify({
                 "success": True,
                 "data": result.stdout,
-                "raw_output": result.stdout
+                "raw_output": result.stdout,
+                "language": language
             })
         else:
             return jsonify({
