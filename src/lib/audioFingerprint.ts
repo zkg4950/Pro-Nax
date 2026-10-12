@@ -44,7 +44,8 @@ class AudioFingerprintService {
 
   constructor(workerUrl?: string) {
     // Use provided URL, config URL, or fallback to localhost
-    this.workerUrl = workerUrl || config.copyright.audioFingerprintUrl || 'http://localhost:8000';
+    const copyrightPort = process.env.COPYRIGHT_SERVICE_PORT || '8000';
+    this.workerUrl = workerUrl || config.copyright.audioFingerprintUrl || `http://localhost:${copyrightPort}`;
   }
 
   /**

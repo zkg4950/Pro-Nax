@@ -15,8 +15,20 @@ export default defineConfig({
     port: 8080,
     host: true,
     proxy: {
-      '/api': {
+      '/api/ai': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+      },
+      '/api/admin': {
         target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+      '/api/creator-coach': {
+        target: 'http://localhost:9000',
+        changeOrigin: true,
+      },
+      '/api': {
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },

@@ -1,14 +1,20 @@
 """
 CrewAI Multi-Agent Video Assistant System
-Uses Ollama (TinyLlama) for local LLM processing
+Uses Ollama for local LLM processing
 """
 
 from crewai import Agent, Crew, Task
 import os
+import sys
+import json
 
-# Use model string for Ollama (CrewAI will handle it)
-# CrewAI supports Ollama natively with model string
-llm = "ollama/tinyllama"
+# Ollama Configuration
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+OLLAMA_FALLBACK_MODEL = os.getenv("OLLAMA_FALLBACK_MODEL", "tinyllama")
+
+# Use configured model
+llm = f"ollama/{OLLAMA_MODEL}"
 
 # Agent 1: Video Title Specialist Agent
 title_agent = Agent(

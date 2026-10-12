@@ -34,8 +34,9 @@ class ThreatExchangeService {
   private workerUrl: string;
   private isServiceAvailable: boolean = true;
 
-  constructor(workerUrl: string = 'http://localhost:8000') {
-    this.workerUrl = workerUrl;
+  constructor(workerUrl?: string) {
+    const copyrightPort = process.env.COPYRIGHT_SERVICE_PORT || '8000';
+    this.workerUrl = workerUrl || `http://localhost:${copyrightPort}`;
   }
 
   /**

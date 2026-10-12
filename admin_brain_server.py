@@ -25,6 +25,21 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 # Ollama Configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+OLLAMA_FALLBACK_MODEL = os.getenv("OLLAMA_FALLBACK_MODEL", "tinyllama")
+
+# Check Ollama availability
+def check_ollama_available():
+    """Check if Ollama is running and model is available"""
+    try:
+        response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
+        if response.status_code == 200:
+            models = response.json().get("models", [])
+            model_names = [m.get("name", "").split(":")[0] for m in models]
+            return True, model_names
+        return False, []
+    except Exception as e:
+        print(f"Ollama check failed: {e}")
+        return False, []
 
 # Memory Database
 MEMORY_DB = "ai_brain_memory.db"
@@ -257,7 +272,7 @@ class SupabaseAdminTools:
 supabase_tools = SupabaseAdminTools()
 
 def call_ollama(messages, system_prompt=None):
-    """Call Ollama API for chat completion - ONLY real AI responses"""
+    """Call Ollama API for chat completion with fallback model"""
     message_lower = messages[-1].get("content", "").lower() if messages else ""
     
     # First check if we need to call real Supabase APIs
@@ -285,7 +300,17 @@ def call_ollama(messages, system_prompt=None):
         except Exception as e:
             return f"Jani, user count mein error aa gaya hai: {str(e)}"
     
-    # For all other messages, ONLY use Ollama - no fallbacks
+    # Check Ollama availability and select model
+    ollama_available, available_models = check_ollama_available()
+    if not ollama_available:
+        return "Jani, Ollama server chal nahi raha hai. Please ensure Ollama is running."
+    
+    # Select model (use fallback if primary not available)
+    selected_model = OLLAMA_MODEL if OLLAMA_MODEL in available_models else OLLAMA_FALLBACK_MODEL
+    if selected_model not in available_models:
+        return f"Jani, Ollama models available: {', '.join(available_models)}. Please pull required model."
+    
+    # For all other messages, use Ollama with selected model
     try:
         simplified_messages = messages[-5:] if len(messages) > 5 else messages
         # Strong Roman Urdu prompt
@@ -295,7 +320,7 @@ Example: "Jani, maine check kiya hai. Sab theek hai."
 Be conversational and helpful. Use "jani" to address the user."""
         
         payload = {
-            "model": OLLAMA_MODEL,
+            "model": selected_model,
             "messages": simplified_messages,
             "stream": False,
             "options": {

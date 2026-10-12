@@ -150,7 +150,8 @@ app.post('/api/creator-coach', async (req, res) => {
     console.log('[API Server] Recent videos:', recentVideos);
 
     // Call local LangGraph server directly
-    const response = await fetch('http://localhost:8000/api/generate', {
+    const langgraphPort = process.env.LANGGRAPH_PORT || '8000';
+    const response = await fetch(`http://localhost:${langgraphPort}/api/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -181,7 +182,7 @@ app.post('/api/creator-coach', async (req, res) => {
     res.status(503).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      suggestion: 'Ensure your local LangGraph server is running at http://localhost:8000',
+      suggestion: `Ensure your local LangGraph server is running at http://localhost:${langgraphPort}`,
     });
   }
 });

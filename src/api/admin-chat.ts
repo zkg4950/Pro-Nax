@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL') || 'https://iouowplbxxivecctuilt.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const ADMIN_BRAIN_PORT = Deno.env.get('ADMIN_BRAIN_PORT') || '8001';
 
 // Admin Brain with human-like conversation and Urdu support
 const ADMIN_BRAIN_SYSTEM_PROMPT = `You are the AI Admin Brain of a video platform application. You have COMPLETE and ABSOLUTE control over the entire system including:
@@ -55,7 +56,7 @@ serve(async (req) => {
     const { message, conversationHistory } = await req.json();
 
     // Call local Python Admin Brain server
-    const adminBrainUrl = 'http://localhost:8001/api/chat';
+    const adminBrainUrl = `http://localhost:${ADMIN_BRAIN_PORT}/api/chat`;
     
     const response = await fetch(adminBrainUrl, {
       method: 'POST',
@@ -89,7 +90,7 @@ serve(async (req) => {
     
     return new Response(JSON.stringify({
       error: 'Failed to connect to Admin Brain server',
-      response: "I'm having trouble connecting to my brain right now. Please make sure the admin server is running on port 8001."
+      response: `I'm having trouble connecting to my brain right now. Please make sure the admin server is running on port ${ADMIN_BRAIN_PORT}.`
     }), {
       status: 503,
       headers: {

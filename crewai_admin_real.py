@@ -17,8 +17,13 @@ SUPABASE_URL = os.getenv("VITE_SUPABASE_URL", "https://iouowplbxxivecctuilt.supa
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 
-# Use Llama3.2 for better tool support
-llm = "ollama/llama3.2"
+# Ollama Configuration
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+OLLAMA_FALLBACK_MODEL = os.getenv("OLLAMA_FALLBACK_MODEL", "tinyllama")
+
+# Use configured model for better tool support
+llm = f"ollama/{OLLAMA_MODEL}"
 
 # =====================================================================================
 # REAL SUPABASE TOOLS

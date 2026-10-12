@@ -14,8 +14,13 @@ SUPABASE_URL = os.getenv("VITE_SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Use Llama3.2 (supports tools and is faster than TinyLlama)
-llm = "ollama/llama3.2"
+# Ollama Configuration
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+OLLAMA_FALLBACK_MODEL = os.getenv("OLLAMA_FALLBACK_MODEL", "tinyllama")
+
+# Use configured model (supports tools and is faster than TinyLlama)
+llm = f"ollama/{OLLAMA_MODEL}"
 
 # =====================================================================================
 # SUPABASE DATABASE TOOLS

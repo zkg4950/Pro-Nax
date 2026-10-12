@@ -14,7 +14,7 @@ import { TaskType } from './src/lib/langgraph/types';
 dotenv.config();
 
 const app = express();
-const PORT = 8000;
+const PORT = parseInt(process.env.LANGGRAPH_PORT || '8000');
 
 // Middleware
 app.use(cors());
