@@ -361,3 +361,5 @@ Built with modern web technologies and inspired by leading video platforms. Spec
 [⭐ Star this repo](https://github.com/your-repo/pronax) • [🐛 Report issues](https://github.com/your-repo/pronax/issues) • [📖 Documentation](https://github.com/your-repo/pronax/wiki)
 
 </div>
+#   P r o - N a x  
+ 
