@@ -12,8 +12,14 @@ import {
   ChevronDown,
   User,
   Check,
+  LogOut,
+  Clock,
+  RefreshCw,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { ChannelStats } from "../types";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface HeaderProps {
   channelStats: ChannelStats | null;
@@ -23,7 +29,9 @@ interface HeaderProps {
   onOpenAIAssistant: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  isAuthed: boolean;
+  sessionTimeoutWarning?: boolean;
+  onRefreshSession?: () => void;
+  onUserActivity?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -34,8 +42,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAIAssistant,
   searchQuery,
   onSearchChange,
-  isAuthed,
+  sessionTimeoutWarning,
+  onRefreshSession,
+  onUserActivity,
 }) => {
+  const { isAuthenticated, user, openAuthModal, signOut } = useAuth();
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
@@ -55,7 +66,27 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-[#272727] bg-[#0f0f0f] px-3 sm:px-4 text-white select-none">
+    <>
+      {/* Session Timeout Warning Banner */}
+      {sessionTimeoutWarning && (
+        <div className="sticky top-0 z-50 flex items-center justify-between bg-amber-900/90 border-b border-amber-700 px-3 sm:px-4 py-2 text-amber-100 text-xs">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-amber-400" />
+            <span className="font-medium">Your session will expire soon due to inactivity</span>
+          </div>
+          <button
+            onClick={() => {
+              if (onRefreshSession) onRefreshSession();
+              if (onUserActivity) onUserActivity();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-800 hover:bg-amber-700 text-amber-100 font-medium transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Stay signed in</span>
+          </button>
+        </div>
+      )}
+      <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#272727] bg-[#0f0f0f] px-3 sm:px-4 text-white select-none">
       {/* Mobile Search Overlay Bar */}
       {isMobileSearchOpen ? (
         <div className="flex w-full items-center gap-2 animate-in fade-in duration-150">
@@ -126,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({
               <Search className="h-4 w-4" />
             </button>
 
-            {isAuthed ? (
+            {isAuthenticated ? (
               <>
                 {/* Studio AI Assistant Button */}
                 <button
@@ -262,22 +293,35 @@ export const Header: React.FC<HeaderProps> = ({
                         >
                           Pronax Account Settings
                         </div>
+                        <div className="border-t border-[#2d2d2d] my-1"></div>
+                        <div
+                          onClick={async () => {
+                            setShowProfileDropdown(false);
+                            await signOut();
+                            window.location.href = '/';
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-red-400 hover:bg-[#2a2a2a] hover:text-red-300 cursor-pointer"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          <span>Sign out</span>
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
               </>
             ) : (
-              <a
-                href="/auth"
-                className="flex items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-500 transition-colors"
+              <button
+                onClick={openAuthModal}
+                className="flex items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-500 transition-colors cursor-pointer"
               >
                 Sign in
-              </a>
+              </button>
             )}
           </div>
         </>
       )}
     </header>
+    </>
   );
 };

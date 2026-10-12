@@ -30,7 +30,7 @@ export function useSidebarMenu(section = 'sidebar') {
         .eq('enabled', true)
         .order('position', { ascending: true });
       if (!alive) return;
-      setItems((data ?? []) as SidebarItem[]);
+      setItems((data ?? []) as unknown as SidebarItem[]);
       setLoaded(true);
     };
     load();

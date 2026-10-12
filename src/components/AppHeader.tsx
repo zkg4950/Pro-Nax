@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
-import { Menu, Search, Upload, Bell, User, X, Mic, Video } from 'lucide-react';
+import { Menu, Search, Upload, User, X, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,26 +14,43 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/loose';
+import { useAuth } from '@/contexts/AuthContext';
+import { useUnseenChats } from '@/hooks/useMessaging';
+import { NotificationsBell } from '@/components/NotificationsBell';
+import { UniversalLoginModal } from '@/components/UniversalLoginModal';
 
 export function AppHeader({ onSidebarToggle }: { onSidebarToggle: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [user, setUser] = useState<{ email?: string; display_name?: string; avatar_url?: string } | null>(null);
 
+  const { isAuthenticated, user: authUser, openAuthModal, closeAuthModal, isAuthModalOpen, signOut } = useAuth();
+  const { count: unseenChats } = useUnseenChats(authUser?.id);
+
   const location = useLocation();
   const isShortsPage = location.pathname.includes('/shorts');
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
+    if (!authUser?.id) return;
+    
+    // Fetch user data from profiles table for consistency
+    supabase.from('profiles').select('avatar_url, display_name').eq('id', authUser.id).maybeSingle().then(({ data, error }) => {
+      if (!error && data) {
         setUser({
-          email: data.user.email,
-          display_name: data.user.user_metadata?.display_name,
-          avatar_url: data.user.user_metadata?.avatar_url,
+          email: authUser.email,
+          display_name: data.display_name || authUser.user_metadata?.display_name,
+          avatar_url: data.avatar_url ?? null,
+        });
+      } else {
+        // Fallback to auth metadata if profile doesn't exist
+        setUser({
+          email: authUser.email,
+          display_name: authUser.user_metadata?.display_name,
+          avatar_url: authUser.user_metadata?.avatar_url,
         });
       }
     });
-  }, []);
+  }, [authUser?.id]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,15 +96,64 @@ export function AppHeader({ onSidebarToggle }: { onSidebarToggle: () => void }) 
             <Button variant="ghost" size="icon" asChild className="h-9 w-9">
               <Link to="/upload"><Upload className="h-4 w-4" /></Link>
             </Button>
-            <Button variant="ghost" size="icon" className="relative h-9 w-9">
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-cyan-400 rounded-full shadow-[0_0_8px_#22d3ee]" />
+            <Button variant="ghost" size="icon" asChild className="relative h-9 w-9">
+              <Link to="/inbox" aria-label="Inbox">
+                <MessageCircle className="h-4 w-4" />
+                {unseenChats > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-cyan-500 text-black text-[9px] font-bold grid place-items-center">
+                    {unseenChats > 99 ? '99+' : unseenChats}
+                  </span>
+                )}
+              </Link>
             </Button>
-            <Avatar className="h-8 w-8 ring-1 ring-cyan-500/50">
-              <AvatarImage src={user?.avatar_url} />
-              <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
-            </Avatar>
+            <NotificationsBell />
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Avatar className="h-8 w-8 ring-1 ring-cyan-500/50 cursor-pointer hover:ring-2 hover:ring-cyan-500 transition">
+                    <AvatarImage src={user?.avatar_url} />
+                    <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
+                  </Avatar>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{user?.display_name || 'User'}</span>
+                      <span className="text-xs text-muted-foreground">{user?.email}</span>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="cursor-pointer">My Channel</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings" className="cursor-pointer">Settings</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/studio" className="cursor-pointer">Studio</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={async () => {
+                    await signOut();
+                    window.location.href = '/';
+                  }} className="cursor-pointer text-destructive">
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={openAuthModal}
+                className="h-9 w-9 cursor-pointer"
+                aria-label="Sign in"
+              >
+                <User className="h-4 w-4" />
+              </Button>
+            )}
           </div>
+
         </div>
       </header>
 
@@ -131,15 +197,77 @@ export function AppHeader({ onSidebarToggle }: { onSidebarToggle: () => void }) 
               </Button>
 
               {!isShortsPage && (
-                <Button variant="ghost" size="icon" className="relative h-10 w-10 text-zinc-200">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute top-2 right-2 h-2 w-2 bg-cyan-400 rounded-full shadow-[0_0_6px_#22d3ee]" />
+                <Button variant="ghost" size="icon" asChild className="relative h-10 w-10 text-zinc-200">
+                  <Link to="/inbox" aria-label="Inbox">
+                    <MessageCircle className="h-5 w-5" />
+                    {unseenChats > 0 && (
+                      <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-cyan-500 text-black text-[9px] font-bold grid place-items-center">
+                        {unseenChats > 99 ? '99+' : unseenChats}
+                      </span>
+                    )}
+                  </Link>
+                </Button>
+              )}
+
+              {!isShortsPage && (
+                <NotificationsBell />
+              )}
+
+              {!isShortsPage && user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Avatar className="h-8 w-8 ring-1 ring-cyan-500/50 cursor-pointer">
+                      <AvatarImage src={user?.avatar_url} />
+                      <AvatarFallback><User className="h-4 w-4" /></AvatarFallback>
+                    </Avatar>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{user?.display_name || 'User'}</span>
+                        <span className="text-xs text-muted-foreground">{user?.email}</span>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/profile" className="cursor-pointer">My Channel</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/settings" className="cursor-pointer">Settings</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/studio" className="cursor-pointer">Studio</Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={async () => {
+                      await signOut();
+                      window.location.href = '/';
+                    }} className="cursor-pointer text-destructive">
+                      Sign out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : !isShortsPage && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={openAuthModal}
+                  className="h-10 w-10 text-zinc-200 cursor-pointer"
+                  aria-label="Sign in"
+                >
+                  <User className="h-5 w-5" />
                 </Button>
               )}
             </div>
           </div>
         )}
       </header>
+
+      {/* Universal Login Modal */}
+      <UniversalLoginModal 
+        isOpen={isAuthModalOpen} 
+        onClose={closeAuthModal}
+      />
     </>
   );
 }

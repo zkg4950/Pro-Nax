@@ -36,10 +36,23 @@ interface AnalyticsViewProps {
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6"];
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
-  channelStats,
+  channelStats: channelStatsProp,
   selectedVideo,
   onClearSelectedVideo,
 }) => {
+  const channelStats: ChannelStats = channelStatsProp ?? {
+    name: "Your channel",
+    handle: "",
+    avatar: "",
+    banner: "",
+    subscribers: 0,
+    subscriberChange28Days: 0,
+    views28Days: 0,
+    watchTimeHours28Days: 0,
+    estimatedRevenue28Days: 0,
+    realtime48HoursViews: 0,
+    realtime60MinsViews: 0,
+  };
   const { user } = useAuthSession();
   const [activeTab, setActiveTab] = useState<
     "overview" | "content" | "audience" | "revenue"
@@ -471,7 +484,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </div>
               <p className="text-xl font-black text-white mt-2">
                 {selectedVideo
-                  ? selectedVideo.watchTime?.toLocaleString() || "0"
+                  ? (selectedVideo as any).watchTime?.toLocaleString() || "0"
                   : (channelStats.watchTimeHours28Days / 1000).toFixed(1) + "K"}
               </p>
               <span className="text-[11px] font-semibold text-emerald-400 flex items-center gap-1 mt-1">

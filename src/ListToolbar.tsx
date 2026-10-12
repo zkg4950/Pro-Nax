@@ -6,7 +6,7 @@
 import { useState, type ReactNode } from 'react';
 import { Search, Download, ChevronLeft, ChevronRight, Loader2, RefreshCw, X } from 'lucide-react';
 import { PAGE_SIZES, EXPORT_MAX, type AdminList } from '@/useAdminList';
-import { downloadCsv } from '@/adminCsv';
+import { downloadCsv } from '@/lib/adminCsv';
 import { toast } from 'sonner';
 
 type Props = {

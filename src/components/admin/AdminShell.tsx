@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef, type ReactNode, type ComponentType } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/loose';
+import { useAdminNotifications, type SystemNotification } from '@/lib/admin-notifications';
+import { NotificationErrorBoundary } from '@/components/admin/NotificationErrorBoundary';
 import {
   Search,
   Bell,
@@ -24,6 +26,11 @@ import {
   AlertTriangle,
   Info,
   Sliders,
+  Clock,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Loader2,
   type LucideIcon
 } from 'lucide-react';
 
@@ -45,6 +52,8 @@ export interface AdminShellProps {
   searchQuery?: string;
   onSearchChange?: (q: string) => void;
   rightSlot?: ReactNode;
+  sessionTimeoutWarning?: boolean;
+  onRefreshSession?: () => void;
 }
 
 export function AdminShell({
@@ -57,6 +66,8 @@ export function AdminShell({
   searchQuery = '',
   onSearchChange,
   rightSlot,
+  sessionTimeoutWarning = false,
+  onRefreshSession,
 }: AdminShellProps) {
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
@@ -86,54 +97,20 @@ export function AdminShell({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Live system notifications sourced from the platform audit trail
-  const [systemNotifications, setSystemNotifications] = useState<
-    Array<{ id: string; title: string; desc: string; time: string; type: 'success' | 'warning' | 'info' }>
-  >([]);
-
-  useEffect(() => {
-    let active = true;
-    const relTime = (iso: string) => {
-      const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-      if (mins < 1) return 'just now';
-      if (mins < 60) return `${mins}m ago`;
-      const hrs = Math.round(mins / 60);
-      if (hrs < 24) return `${hrs}h ago`;
-      return `${Math.round(hrs / 24)}d ago`;
-    };
-    const map = (rows: any[]) =>
-      rows.map((r) => ({
-        id: String(r.id),
-        title: String(r.action || 'System event').replace(/_/g, ' '),
-        desc: [r.entity_type, r.entity_id ? `#${String(r.entity_id).slice(0, 8)}` : null, r.actor_email]
-          .filter(Boolean)
-          .join(' · ') || 'Platform activity recorded',
-        time: relTime(r.created_at),
-        type: (r.severity === 'critical' || r.severity === 'error'
-          ? 'warning'
-          : r.severity === 'warning'
-            ? 'warning'
-            : 'info') as 'success' | 'warning' | 'info',
-      }));
-
-    const load = async () => {
-      const { data } = await supabase
-        .from('audit_logs')
-        .select('id,action,entity_type,entity_id,actor_email,severity,created_at')
-        .order('created_at', { ascending: false })
-        .limit(6);
-      if (active && data) setSystemNotifications(map(data));
-    };
-    load();
-    const ch = supabase
-      .channel('admin:shell-notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, load)
-      .subscribe();
-    return () => {
-      active = false;
-      supabase.removeChannel(ch);
-    };
-  }, []);
+  // Optimized notification system with debouncing, pagination, and error handling
+  const {
+    notifications: systemNotifications,
+    loading: notificationsLoading,
+    error: notificationsError,
+    connectionStatus,
+    loadMore: loadMoreNotifications,
+    clear: clearNotifications,
+  } = useAdminNotifications({
+    maxNotifications: 10,
+    debounceMs: 500,
+    enableRealtime: true,
+    paginationSize: 6,
+  });
 
   return (
     <div className="min-h-screen bg-[#07090e] text-zinc-100 font-sans flex flex-col selection:bg-cyan-500 selection:text-black relative overflow-x-hidden">
@@ -143,7 +120,22 @@ export function AdminShell({
       <div className="fixed bottom-10 left-1/3 w-[400px] h-[400px] bg-indigo-600/10 rounded-full blur-[140px] pointer-events-none z-0" />
 
       {/* Enterprise Pro Nax Command Header */}
-      <header className="sticky top-0 z-40 bg-[#0b0e14]/85 backdrop-blur-2xl border-b border-white/10 px-4 lg:px-6 h-16 flex items-center justify-between gap-4 shadow-2xl shadow-black/80">
+      <header className={`sticky top-0 z-40 bg-[#0b0e14]/85 backdrop-blur-2xl border-b border-white/10 px-4 lg:px-6 flex items-center justify-between gap-4 shadow-2xl shadow-black/80 transition-all duration-300 ${sessionTimeoutWarning ? 'h-24 pt-8' : 'h-16'}`}>
+        {/* Session Timeout Warning Banner */}
+        {sessionTimeoutWarning && (
+          <div className="absolute top-0 left-0 right-0 bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 flex items-center justify-center gap-3 z-50">
+            <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
+            <span className="text-xs text-amber-300 font-medium">
+              Session expiring soon due to inactivity
+            </span>
+            <button
+              onClick={onRefreshSession}
+              className="text-xs px-3 py-1 rounded-lg bg-amber-500/30 text-amber-200 hover:bg-amber-500/40 transition font-medium"
+            >
+              Keep Session Active
+            </button>
+          </div>
+        )}
         {/* Left Section: Branding & Sidebar Controls */}
         <div className="flex items-center gap-3">
           <button
@@ -242,29 +234,67 @@ export function AdminShell({
               title="Notifications"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
+              {systemNotifications.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] animate-pulse" />
+              )}
+              {notificationsLoading && (
+                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-blue-500 animate-ping" />
+              )}
             </button>
 
             <AnimatePresence>
               {notificationsOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.15 }}
-                  className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-2rem))] bg-[#0e121b] border border-white/15 rounded-2xl shadow-2xl p-4 z-50 backdrop-blur-2xl space-y-3"
-                >
+                <NotificationErrorBoundary>
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 mt-2 w-[min(20rem,calc(100vw-2rem))] bg-[#0e121b] border border-white/15 rounded-2xl shadow-2xl p-4 z-50 backdrop-blur-2xl space-y-3"
+                  >
                   <div className="flex items-center justify-between border-b border-white/10 pb-2">
                     <h4 className="text-xs font-bold text-white flex items-center gap-2">
                       <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Studio Notifications
                     </h4>
-                    <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
-                      {systemNotifications.length} New
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {/* Connection Status Indicator */}
+                      <div className="flex items-center gap-1" title={`Real-time ${connectionStatus.connected ? 'connected' : 'disconnected'}`}>
+                        {connectionStatus.connected ? (
+                          <Wifi className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <WifiOff className="w-3 h-3 text-amber-400" />
+                        )}
+                      </div>
+                      <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                        {systemNotifications.length} New
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    {systemNotifications.length === 0 && (
+                  {/* Error Display */}
+                  {notificationsError && (
+                    <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
+                      <p className="text-[10px] text-red-400">Failed to load notifications</p>
+                      <button
+                        onClick={() => window.location.reload()}
+                        className="text-[9px] text-red-300 underline mt-1"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Loading State */}
+                  {notificationsLoading && systemNotifications.length === 0 && (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
+                      <span className="text-[10px] text-zinc-400 ml-2">Loading notifications...</span>
+                    </div>
+                  )}
+
+                  {/* Notifications List */}
+                  <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+                    {!notificationsLoading && systemNotifications.length === 0 && (
                       <p className="text-[11px] text-zinc-500 text-center py-3">No system events yet.</p>
                     )}
                     {systemNotifications.map((n) => (
@@ -285,7 +315,26 @@ export function AdminShell({
                       </div>
                     ))}
                   </div>
+
+                  {/* Action Buttons */}
+                  {systemNotifications.length > 0 && (
+                    <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                      <button
+                        onClick={clearNotifications}
+                        className="text-[10px] text-zinc-400 hover:text-white transition"
+                      >
+                        Clear All
+                      </button>
+                      <button
+                        onClick={() => loadMoreNotifications(2)}
+                        className="text-[10px] text-cyan-400 hover:text-cyan-300 transition flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" /> Load More
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
+                </NotificationErrorBoundary>
               )}
             </AnimatePresence>
           </div>

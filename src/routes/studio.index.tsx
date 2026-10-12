@@ -3,7 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/studio/")({
   beforeLoad: () => {
-    // Redirect to the ProNax Studio (full YouTube Studio clone)
+    // Redirect to the ProNax Studio (full creator studio)
     throw redirect({ to: "/studio/dashboard" });
   },
 });

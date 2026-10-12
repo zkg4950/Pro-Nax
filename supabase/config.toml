@@ -11,7 +11,7 @@ max_rows = 1000
 enabled = false
 
 [realtime]
-enabled = false
+enabled = true
 
 [db]
 port = 54322

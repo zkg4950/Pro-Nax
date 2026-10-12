@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
-import { geminiFetch } from "../geminiClient";
+import { geminiFetch } from "@/pronax-studio/geminiClient";
 import React, { useState, useEffect } from "react";
 import {
   X,
@@ -8,7 +8,7 @@ import {
   DollarSign,
   Loader2,
 } from "lucide-react";
-import { Video } from "../types";
+import { Video } from "@/pronax-studio/types";
 
 interface VideoEditModalProps {
   video: Video | null;

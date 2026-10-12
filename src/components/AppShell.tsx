@@ -894,7 +894,7 @@ export function AppShell() {
         if (!rows) {
           const { data } = await supabase
             .from('videos')
-            .select('id,title,description,video_url,thumb_url,owner_id,tags,views_count')
+            .select('id,title,description,video_url,thumb_url,owner_id,tags,views_count,likes_count')
             .eq('is_short', true)
             .eq('is_removed', false)
             .eq('is_shadow_banned', false)
@@ -910,9 +910,7 @@ export function AppShell() {
         }
 
         const ownerIds = Array.from(new Set(rows.map((v: any) => v.owner_id).filter(Boolean)));
-        const videoIds = rows.map((v: any) => v.id);
         const profileMap = new Map<string, any>();
-        const likesMap = new Map<string, number>();
 
         if (ownerIds.length) {
           const { data: profs } = await supabase
@@ -920,16 +918,6 @@ export function AppShell() {
             .select('id,display_name,avatar_url,handle')
             .in('id', ownerIds);
           (profs ?? []).forEach((p: any) => profileMap.set(p.id, p));
-        }
-
-        if (videoIds.length) {
-          const { data: likes } = await supabase
-            .from('video_likes')
-            .select('video_id')
-            .in('video_id', videoIds);
-          (likes ?? []).forEach((r: any) => {
-            likesMap.set(r.video_id, (likesMap.get(r.video_id) ?? 0) + 1);
-          });
         }
 
         const mapped: Short[] = rows
@@ -951,7 +939,7 @@ export function AppShell() {
               channel: '@' + channelHandle,
               avatar: prof.avatar_url,
               description: v.description || '',
-              likes: likesMap.get(v.id) ?? 0,
+              likes: Number(v.likes_count ?? 0),
               comments: 0,
               shares: 0,
               music: 'Original Sound — ' + (prof.display_name || 'creator'),

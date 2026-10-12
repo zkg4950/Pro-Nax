@@ -14,6 +14,7 @@ import { Route as AppealRouteImport } from './routes/appeal'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as HistoryRouteImport } from './routes/history'
+import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as LikesRouteImport } from './routes/likes'
 import { Route as PlaylistsRouteImport } from './routes/playlists'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -28,6 +29,7 @@ import { Route as TrendingRouteImport } from './routes/trending'
 import { Route as UploadRouteImport } from './routes/upload'
 import { Route as WalletRouteImport } from './routes/wallet'
 import { Route as AdminAdminRouteImport } from './routes/admin._admin'
+import { Route as ChallengesIndexRouteImport } from './routes/challenges.index'
 import { Route as ChannelHandleRouteImport } from './routes/channel.$handle'
 import { Route as LiveIndexRouteImport } from './routes/live.index'
 import { Route as LivePlaybackIdRouteImport } from './routes/live.$playbackId'
@@ -38,6 +40,7 @@ import { Route as ProfileHandleRouteImport } from './routes/profile.$handle'
 import { Route as ShortsIndexRouteImport } from './routes/shorts.index'
 import { Route as ShortsIdRouteImport } from './routes/shorts.$id'
 import { Route as SoundIdRouteImport } from './routes/sound.$id'
+import { Route as SoundsIndexRouteImport } from './routes/sounds.index'
 import { Route as StudioIndexRouteImport } from './routes/studio.index'
 import { Route as StudioSplatRouteImport } from './routes/studio.$'
 import { Route as StudioDashboardRouteImport } from './routes/studio.dashboard'
@@ -69,6 +72,11 @@ const ExploreRoute = ExploreRouteImport.update({
 const HistoryRoute = HistoryRouteImport.update({
   id: '/history',
   path: '/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InboxRoute = InboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LikesRoute = LikesRouteImport.update({
@@ -141,6 +149,11 @@ const AdminAdminRoute = AdminAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChallengesIndexRoute = ChallengesIndexRouteImport.update({
+  id: '/challenges/',
+  path: '/challenges/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChannelHandleRoute = ChannelHandleRouteImport.update({
   id: '/channel/$handle',
   path: '/channel/$handle',
@@ -191,6 +204,11 @@ const SoundIdRoute = SoundIdRouteImport.update({
   path: '/sound/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SoundsIndexRoute = SoundsIndexRouteImport.update({
+  id: '/sounds/',
+  path: '/sounds/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StudioIndexRoute = StudioIndexRouteImport.update({
   id: '/studio/',
   path: '/studio/',
@@ -233,6 +251,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/explore': typeof ExploreRoute
   '/history': typeof HistoryRoute
+  '/inbox': typeof InboxRoute
   '/likes': typeof LikesRoute
   '/playlists': typeof PlaylistsRoute
   '/privacy': typeof PrivacyRoute
@@ -257,9 +276,11 @@ export interface FileRoutesByFullPath {
   '/studio/$': typeof StudioSplatRoute
   '/studio/dashboard': typeof StudioDashboardRoute
   '/watch/$id': typeof WatchIdRoute
+  '/challenges/': typeof ChallengesIndexRoute
   '/live/': typeof LiveIndexRoute
   '/profile/': typeof ProfileIndexRoute
   '/shorts/': typeof ShortsIndexRoute
+  '/sounds/': typeof SoundsIndexRoute
   '/studio/': typeof StudioIndexRoute
   '/admin/engine': typeof AdminAdminEngineRoute
   '/pronax/oauth/consent': typeof PronaxOauthConsentRoute
@@ -271,6 +292,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/explore': typeof ExploreRoute
   '/history': typeof HistoryRoute
+  '/inbox': typeof InboxRoute
   '/likes': typeof LikesRoute
   '/playlists': typeof PlaylistsRoute
   '/privacy': typeof PrivacyRoute
@@ -294,9 +316,11 @@ export interface FileRoutesByTo {
   '/studio/$': typeof StudioSplatRoute
   '/studio/dashboard': typeof StudioDashboardRoute
   '/watch/$id': typeof WatchIdRoute
+  '/challenges': typeof ChallengesIndexRoute
   '/live': typeof LiveIndexRoute
   '/profile': typeof ProfileIndexRoute
   '/shorts': typeof ShortsIndexRoute
+  '/sounds': typeof SoundsIndexRoute
   '/studio': typeof StudioIndexRoute
   '/admin/engine': typeof AdminAdminEngineRoute
   '/pronax/oauth/consent': typeof PronaxOauthConsentRoute
@@ -309,6 +333,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/explore': typeof ExploreRoute
   '/history': typeof HistoryRoute
+  '/inbox': typeof InboxRoute
   '/likes': typeof LikesRoute
   '/playlists': typeof PlaylistsRoute
   '/privacy': typeof PrivacyRoute
@@ -333,9 +358,11 @@ export interface FileRoutesById {
   '/studio/$': typeof StudioSplatRoute
   '/studio/dashboard': typeof StudioDashboardRoute
   '/watch/$id': typeof WatchIdRoute
+  '/challenges/': typeof ChallengesIndexRoute
   '/live/': typeof LiveIndexRoute
   '/profile/': typeof ProfileIndexRoute
   '/shorts/': typeof ShortsIndexRoute
+  '/sounds/': typeof SoundsIndexRoute
   '/studio/': typeof StudioIndexRoute
   '/admin/_admin/engine': typeof AdminAdminEngineRoute
   '/pronax/oauth/consent': typeof PronaxOauthConsentRoute
@@ -349,6 +376,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/explore'
     | '/history'
+    | '/inbox'
     | '/likes'
     | '/playlists'
     | '/privacy'
@@ -373,9 +401,11 @@ export interface FileRouteTypes {
     | '/studio/$'
     | '/studio/dashboard'
     | '/watch/$id'
+    | '/challenges/'
     | '/live/'
     | '/profile/'
     | '/shorts/'
+    | '/sounds/'
     | '/studio/'
     | '/admin/engine'
     | '/pronax/oauth/consent'
@@ -387,6 +417,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/explore'
     | '/history'
+    | '/inbox'
     | '/likes'
     | '/playlists'
     | '/privacy'
@@ -410,9 +441,11 @@ export interface FileRouteTypes {
     | '/studio/$'
     | '/studio/dashboard'
     | '/watch/$id'
+    | '/challenges'
     | '/live'
     | '/profile'
     | '/shorts'
+    | '/sounds'
     | '/studio'
     | '/admin/engine'
     | '/pronax/oauth/consent'
@@ -424,6 +457,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/explore'
     | '/history'
+    | '/inbox'
     | '/likes'
     | '/playlists'
     | '/privacy'
@@ -448,9 +482,11 @@ export interface FileRouteTypes {
     | '/studio/$'
     | '/studio/dashboard'
     | '/watch/$id'
+    | '/challenges/'
     | '/live/'
     | '/profile/'
     | '/shorts/'
+    | '/sounds/'
     | '/studio/'
     | '/admin/_admin/engine'
     | '/pronax/oauth/consent'
@@ -463,6 +499,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ExploreRoute: typeof ExploreRoute
   HistoryRoute: typeof HistoryRoute
+  InboxRoute: typeof InboxRoute
   LikesRoute: typeof LikesRoute
   PlaylistsRoute: typeof PlaylistsRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -487,9 +524,11 @@ export interface RootRouteChildren {
   StudioSplatRoute: typeof StudioSplatRoute
   StudioDashboardRoute: typeof StudioDashboardRoute
   WatchIdRoute: typeof WatchIdRoute
+  ChallengesIndexRoute: typeof ChallengesIndexRoute
   LiveIndexRoute: typeof LiveIndexRoute
   ProfileIndexRoute: typeof ProfileIndexRoute
   ShortsIndexRoute: typeof ShortsIndexRoute
+  SoundsIndexRoute: typeof SoundsIndexRoute
   StudioIndexRoute: typeof StudioIndexRoute
   PronaxOauthConsentRoute: typeof PronaxOauthConsentRoute
 }
@@ -529,6 +568,13 @@ declare module '@tanstack/react-router' {
       path: '/history'
       fullPath: '/history'
       preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/likes': {
@@ -629,6 +675,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAdminRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/challenges/': {
+      id: '/challenges/'
+      path: '/challenges'
+      fullPath: '/challenges/'
+      preLoaderRoute: typeof ChallengesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/channel/$handle': {
       id: '/channel/$handle'
       path: '/channel/$handle'
@@ -697,6 +750,13 @@ declare module '@tanstack/react-router' {
       path: '/sound/$id'
       fullPath: '/sound/$id'
       preLoaderRoute: typeof SoundIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sounds/': {
+      id: '/sounds/'
+      path: '/sounds'
+      fullPath: '/sounds/'
+      preLoaderRoute: typeof SoundsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/studio/': {
@@ -771,6 +831,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ExploreRoute: ExploreRoute,
   HistoryRoute: HistoryRoute,
+  InboxRoute: InboxRoute,
   LikesRoute: LikesRoute,
   PlaylistsRoute: PlaylistsRoute,
   PrivacyRoute: PrivacyRoute,
@@ -795,9 +856,11 @@ const rootRouteChildren: RootRouteChildren = {
   StudioSplatRoute: StudioSplatRoute,
   StudioDashboardRoute: StudioDashboardRoute,
   WatchIdRoute: WatchIdRoute,
+  ChallengesIndexRoute: ChallengesIndexRoute,
   LiveIndexRoute: LiveIndexRoute,
   ProfileIndexRoute: ProfileIndexRoute,
   ShortsIndexRoute: ShortsIndexRoute,
+  SoundsIndexRoute: SoundsIndexRoute,
   StudioIndexRoute: StudioIndexRoute,
   PronaxOauthConsentRoute: PronaxOauthConsentRoute,
 }

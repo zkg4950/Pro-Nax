@@ -1,10 +1,11 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Check, Edit3, Image as ImageIcon, UserPlus, UserCheck, Share2, Settings, BadgeCheck, MoreVertical, Wallet, LogOut, Users, Loader2, Home, Compass, PlaySquare, TrendingUp, History as HistoryIcon, ListVideo, Heart, Bookmark, Upload, Radio, SlidersHorizontal, MessageSquare, Heart as HeartIcon, Send } from 'lucide-react';
+import { Camera, Check, Edit3, Image as ImageIcon, UserPlus, UserCheck, Share2, Settings, BadgeCheck, MoreVertical, Wallet, LogOut, Users, Loader2, Home, Compass, PlaySquare, TrendingUp, History as HistoryIcon, ListVideo, Heart, Bookmark, Upload, Radio, SlidersHorizontal, MessageSquare, MessageCircle, Heart as HeartIcon, Send } from 'lucide-react';
 import { Link, useNavigate, useParams } from '@/lib/router-compat';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/loose';
+import { useAuthSession } from '@/hooks/useAuthSession';
 import { OrbBackground } from '@/components/ui/orb-background';
 import { AnimatedCounter, compactFormat } from '@/components/ui/animated-counter';
 import paradiseBanner from '@/assets/paradise-banner.jpg';
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { openDirectMessage } from '@/hooks/useMessaging';
 
 type Tab = 'videos' | 'liked' | 'saved' | 'following' | 'followers' | 'community';
 
@@ -37,6 +39,7 @@ interface UserRow {
   id: string;
   name: string;
   initials: string;
+  handle?: string | null;
   avatar_url?: string | null;
   followerCount?: number;
 }
@@ -82,6 +85,7 @@ function fmtDuration(s: number | null) {
 
 export default function Profile() {
   const navigate = useNavigate();
+  const { signOut } = useAuthSession();
   const { handle: handleParam } = useParams<{ handle: string }>();
   const [tab, setTab] = useState<Tab>('videos');
 
@@ -139,12 +143,17 @@ export default function Profile() {
       let targetHandle = handleParam;
       
       if (targetHandle) {
-        // Viewing another user's profile by handle
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('id,display_name,username,handle,avatar_url,bio,is_creator,is_verified,subscribers_count,videos_count')
-          .or(`handle.eq.${targetHandle},display_name.eq.${targetHandle}`)
-          .maybeSingle();
+        // Resolve by user id (UUID), handle, username or display name.
+        const decoded = decodeURIComponent(targetHandle);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(decoded);
+        const cols = 'id,display_name,username,handle,avatar_url,bio,is_creator,is_verified,subscribers_count,videos_count';
+        const query = isUuid
+          ? supabase.from('profiles').select(cols).eq('id', decoded)
+          : supabase.from('profiles').select(cols).or(
+              `handle.eq.${decoded},username.eq.${decoded},display_name.eq.${decoded}`,
+            );
+        const { data: rows } = await query.limit(1);
+        const profileData = (rows ?? [])[0] ?? null;
 
         if (profileData) {
           targetUserId = (profileData as any).id;
@@ -197,17 +206,15 @@ export default function Profile() {
     setTotalViews(total);
     
     // Fetch total likes across all user's videos
-    const { data: userVideos } = await supabase.from('videos').select('id').eq('owner_id', userId).eq('is_removed', false);
-    const videoIds = (userVideos ?? []).map((v: any) => v.id);
-    if (videoIds.length > 0) {
-      const { count: likesCount } = await supabase.from('video_likes').select('id', { count: 'exact', head: true }).in('video_id', videoIds);
-      setTotalLikes(likesCount ?? 0);
-    } else {
-      setTotalLikes(0);
-    }
+    // Sum the denormalized like counters instead of counting the like table.
+    const { data: userVideos } = await supabase
+      .from('videos')
+      .select('likes_count')
+      .eq('owner_id', userId)
+      .eq('is_removed', false);
+    setTotalLikes((userVideos ?? []).reduce((sum: number, v: any) => sum + Number(v.likes_count ?? 0), 0));
     
     // Debug: log following count to help diagnose issue
-    console.log('Stats loaded:', { followingCount: a.count, followersCount: b.count, userId });
   }, [userId]);
 
   // 4) Tab-specific data loaders
@@ -283,11 +290,11 @@ export default function Profile() {
         if (followingIds.length > 0) {
           const { data: profiles } = await supabase
             .from('profiles')
-            .select('id, display_name, avatar_url')
+            .select('id, display_name, handle, avatar_url')
             .in('id', followingIds);
           const list: UserRow[] = (profiles ?? []).map((p: any) => {
             const n = p.display_name || 'Creator';
-            return { id: p.id, name: n, initials: n.slice(0, 2).toUpperCase(), avatar_url: p.avatar_url };
+            return { id: p.id, name: n, handle: p.handle, initials: n.slice(0, 2).toUpperCase(), avatar_url: p.avatar_url };
           });
           setFollowing(list);
         } else {
@@ -303,23 +310,50 @@ export default function Profile() {
         if (followerIds.length > 0) {
           const { data: profiles } = await supabase
             .from('profiles')
-            .select('id, display_name, avatar_url')
+            .select('id, display_name, handle, avatar_url')
             .in('id', followerIds);
           const list: UserRow[] = (profiles ?? []).map((p: any) => {
             const n = p.display_name || 'Creator';
-            return { id: p.id, name: n, initials: n.slice(0, 2).toUpperCase(), avatar_url: p.avatar_url };
+            return { id: p.id, name: n, handle: p.handle, initials: n.slice(0, 2).toUpperCase(), avatar_url: p.avatar_url };
           });
           setFollowers(list);
         } else {
           setFollowers([]);
         }
       } else if (tab === 'community') {
-        const { data } = await supabase.rpc('get_channel_community_posts', {
+        // Preferred path: enriched RPC. Falls back to a direct table read so
+        // posts still render when the RPC is not deployed yet.
+        const { data, error } = await supabase.rpc('get_channel_community_posts', {
           p_creator_id: userId,
           p_limit: 20,
           p_offset: 0
         });
-        setCommunityPosts(data ?? []);
+        if (!error && Array.isArray(data)) {
+          setCommunityPosts(data as CommunityPost[]);
+        } else {
+          const { data: rows } = await supabase
+            .from('community_posts')
+            .select('*')
+            .eq('creator_id', userId)
+            .order('is_pinned', { ascending: false })
+            .order('created_at', { ascending: false })
+            .limit(20);
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('id, display_name, handle, avatar_url')
+            .eq('id', userId)
+            .maybeSingle();
+          const p: any = prof ?? {};
+          setCommunityPosts(((rows ?? []) as any[]).map((r) => ({
+            ...r,
+            creator_name: p.display_name || 'Creator',
+            creator_handle: p.handle || '',
+            creator_avatar: p.avatar_url || '',
+            likes_count: r.likes_count ?? 0,
+            comments_count: r.comments_count ?? 0,
+            shares_count: r.shares_count ?? 0,
+          })) as CommunityPost[]);
+        }
       }
     } finally {
       setLoading(false);
@@ -582,7 +616,7 @@ export default function Profile() {
 
             <DropdownMenuSeparator className="my-1 bg-border/40" />
             <DropdownMenuItem
-              onClick={async () => { await supabase.auth.signOut(); toast({ title: 'Logged out' }); navigate('/'); }}
+              onClick={async () => { await signOut(); toast({ title: 'Logged out' }); navigate('/'); }}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer text-sm font-medium text-destructive focus:bg-destructive/15"
             >
               <span className="w-8 h-8 rounded-lg bg-destructive/15 border border-destructive/30 flex items-center justify-center text-destructive"><LogOut className="w-4 h-4" /></span>
@@ -655,6 +689,26 @@ export default function Profile() {
                 }
               }} className="flex items-center gap-1.5 px-4 py-2 rounded-full gradient-primary text-primary-foreground glow-primary text-xs font-semibold transition">
                 <UserPlus className="w-3.5 h-3.5" /> Follow
+              </button>
+            )}
+            {!isOwnProfile && userId && (
+              <button
+                onClick={async () => {
+                  if (!authUserId) {
+                    toast({ title: 'Please login first', variant: 'destructive' });
+                    navigate('/auth');
+                    return;
+                  }
+                  const { roomId, error } = await openDirectMessage(userId);
+                  if (error) {
+                    toast({ title: 'Cannot open chat', description: error.message, variant: 'destructive' });
+                    return;
+                  }
+                  navigate(`/inbox?room=${roomId}`);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full glass border border-border/40 text-xs font-semibold transition hover:border-primary/60"
+              >
+                <MessageCircle className="w-3.5 h-3.5" /> Message
               </button>
             )}
             <button onClick={() => { navigator.clipboard?.writeText(window.location.href); toast({ title: 'Profile link copied' }); }} className="hidden p-2 rounded-full glass border border-border/40 text-muted-foreground hover:text-foreground transition" aria-label="Share profile">
@@ -740,11 +794,7 @@ export default function Profile() {
               ) : tab === 'followers' ? (
                 <UserList items={followers} kind="followers" meId={authUserId} onChange={loadTabData} />
               ) : tab === 'community' ? (
-                communityPosts.length === 0 ? (
-                  <EmptyState text="No community posts yet." />
-                ) : (
-                  <CommunityPosts posts={communityPosts} isOwnProfile={isOwnProfile} />
-                )
+                <CommunityPosts posts={communityPosts} isOwnProfile={isOwnProfile} onChanged={loadTabData} />
               ) : null}
             </motion.div>
           </AnimatePresence>
@@ -911,12 +961,15 @@ function UserList({ items, kind, meId, onChange }: { items: UserRow[]; kind: 'fo
         const isFriend = kind === 'following' ? !!followedByMap[u.id] : followed;
         return (
           <div key={u.id} className="flex items-center gap-3 glass rounded-xl border border-border/40 p-3 tilt-3d">
-            <div className="w-11 h-11 rounded-full overflow-hidden gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0">
-              {u.avatar_url ? <img src={u.avatar_url} alt={u.name} className="w-full h-full object-cover" /> : u.initials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">{u.name}</p>
-            </div>
+            <Link to={`/profile/${u.id}`} className="flex flex-1 min-w-0 items-center gap-3" aria-label={`Open ${u.name}'s profile`}>
+              <div className="w-11 h-11 rounded-full overflow-hidden gradient-primary flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0">
+                {u.avatar_url ? <img src={u.avatar_url} alt={u.name} className="w-full h-full object-cover" /> : u.initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{u.name}</p>
+                {u.handle && <p className="text-xs text-muted-foreground truncate">@{u.handle}</p>}
+              </div>
+            </Link>
             <button
               onClick={() => toggle(u)}
               disabled={busy === u.id || u.id === meId}
@@ -931,7 +984,7 @@ function UserList({ items, kind, meId, onChange }: { items: UserRow[]; kind: 'fo
   );
 }
 
-function CommunityPosts({ posts, isOwnProfile }: { posts: CommunityPost[]; isOwnProfile: boolean }) {
+function CommunityPosts({ posts, isOwnProfile, onChanged }: { posts: CommunityPost[]; isOwnProfile: boolean; onChanged: () => void }) {
   const [newPostContent, setNewPostContent] = useState('');
   const [posting, setPosting] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -1005,7 +1058,7 @@ function CommunityPosts({ posts, isOwnProfile }: { posts: CommunityPost[]; isOwn
       setMediaFiles([]);
       toast({ title: 'Post created successfully' });
       // Reload posts
-      window.location.reload();
+      onChanged();
     } catch (error) {
       console.error('Error creating post:', error);
       toast({ title: 'Failed to create post', variant: 'destructive' });
@@ -1029,21 +1082,12 @@ function CommunityPosts({ posts, isOwnProfile }: { posts: CommunityPost[]; isOwn
       if (error) throw error;
       
       // Reload posts to update like count
-      window.location.reload();
+      onChanged();
     } catch (error) {
       console.error('Error liking post:', error);
       toast({ title: 'Failed to like post', variant: 'destructive' });
     }
   };
-
-  if (posts.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-        <p className="text-muted-foreground">No community posts yet.</p>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -1116,6 +1160,13 @@ function CommunityPosts({ posts, isOwnProfile }: { posts: CommunityPost[]; isOwn
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {posts.length === 0 && (
+        <div className="text-center py-12">
+          <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No community posts yet.</p>
         </div>
       )}
 

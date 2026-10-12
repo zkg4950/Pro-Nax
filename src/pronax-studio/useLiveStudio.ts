@@ -93,7 +93,7 @@ const toVideo = (r: Row, likes = 0, commentsCount = 0): Video => {
 /* ---------------- hook ---------------- */
 
 export function useLiveStudio() {
-  const { user, loading: authLoading } = useAuthSession();
+  const { user, loading: authLoading, signOut } = useAuthSession();
   const userId = user?.id;
 
   const [loading, setLoading] = useState(false);
@@ -256,18 +256,16 @@ export function useLiveStudio() {
 
   const saveVideo = useCallback(async (updated: Video) => {
     setVideos((prev) => prev.map((v) => (v.id === updated.id ? updated : v)));
-    const { error } = await supabase
-      .from("videos")
-      .update({
-        title: updated.title,
-        description: updated.description,
-        tags: updated.tags,
-        category: updated.category,
-        visibility: updated.visibility.toLowerCase(),
-        monetization_enabled: updated.monetization,
-        thumb_url: updated.thumbnail || null,
-      })
-      .eq("id", updated.id);
+    const { error } = await supabase.rpc("creator_update_video", {
+      p_video_id: updated.id,
+      p_title: updated.title,
+      p_description: updated.description,
+      p_tags: updated.tags,
+      p_category: updated.category,
+      p_visibility: updated.visibility.toLowerCase(),
+      p_monetization_enabled: updated.monetization,
+      p_thumb_url: updated.thumbnail || null,
+    });
     if (error) console.error("[pronax-studio] save video failed", error);
   }, []);
 
@@ -296,22 +294,20 @@ export function useLiveStudio() {
   const addCommentReply = useCallback(
     async (commentId: string, replyText: string) => {
       setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, replyText } : c)));
-      const parent = comments.find((c) => c.id === commentId);
-      if (!parent || !userId) return;
-      const { error } = await supabase.from("video_comments").insert({
-        video_id: parent.videoId,
-        user_id: userId,
-        parent_id: commentId,
-        text: replyText,
+      const { error } = await supabase.rpc("creator_add_comment_reply", {
+        p_parent_comment_id: commentId,
+        p_reply_text: replyText,
       });
       if (error) console.error("[pronax-studio] reply failed", error);
     },
-    [comments, userId]
+    []
   );
 
   const deleteComment = useCallback(async (commentId: string) => {
     setComments((prev) => prev.filter((c) => c.id !== commentId));
-    const { error } = await supabase.from("video_comments").delete().eq("id", commentId);
+    const { error } = await supabase.rpc("creator_delete_comment", {
+      p_comment_id: commentId,
+    });
     if (error) console.error("[pronax-studio] delete comment failed", error);
   }, []);
 
@@ -322,15 +318,14 @@ export function useLiveStudio() {
   const updateChannel = useCallback(
     async (patch: Partial<ChannelStats>) => {
       setChannelStats((prev) => (prev ? { ...prev, ...patch } : prev));
-      if (!userId) return;
       const upd: { display_name?: string | null; avatar_url?: string | null } = {};
       if (patch.name !== undefined) upd.display_name = patch.name;
       if (patch.avatar !== undefined) upd.avatar_url = patch.avatar;
       if (!Object.keys(upd).length) return;
-      const { error } = await supabase.from("profiles").update(upd).eq("id", userId);
+      const { error } = await supabase.rpc("creator_update_profile", upd);
       if (error) console.error("[pronax-studio] profile update failed", error);
     },
-    [userId]
+    []
   );
 
   return {
@@ -349,5 +344,6 @@ export function useLiveStudio() {
     deleteComment,
     toggleHeartComment,
     updateChannel,
+    signOut,
   };
 }

@@ -41,17 +41,53 @@ export function getSessionId(): string {
 }
 
 /**
- * Get country code from IP geolocation (mock implementation)
- * In production, this would use a real geolocation service
+ * Get country code from IP geolocation using free API service
+ * Uses ipapi.co for real-time IP geolocation with fallback options
  */
 export async function getCountryFromIP(): Promise<{ code: string; name: string } | null> {
   try {
-    // Mock implementation - in production, use a real geolocation API
-    // const response = await fetch('https://ipapi.co/json/');
-    // const data = await response.json();
-    // return { code: data.country_code, name: data.country_name };
-    
-    return null; // Return null for now, will be set to "Unknown" in the tracker
+    // Try multiple free geolocation APIs with fallbacks
+    const geoApis = [
+      'https://ipapi.co/json/',           // Primary: ipapi.co (free tier)
+      'https://ip-api.com/json/',         // Fallback 1: ip-api.com (free, no SSL)
+      'https://api.ipify.org?format=json', // Fallback 2: ipify (IP only, need separate geo)
+    ];
+
+    for (const apiUrl of geoApis) {
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000), // 5 second timeout
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+
+        // Handle different API response formats
+        if (apiUrl.includes('ipapi.co')) {
+          return { 
+            code: data.country_code || data.country, 
+            name: data.country_name || data.country 
+          };
+        } else if (apiUrl.includes('ip-api.com')) {
+          return { 
+            code: data.countryCode, 
+            name: data.country 
+          };
+        } else if (apiUrl.includes('ipify')) {
+          // ipify only returns IP, need another service for geo
+          continue;
+        }
+      } catch (apiError) {
+        console.warn(`[analyticsTracker] API ${apiUrl} failed:`, apiError);
+        continue;
+      }
+    }
+
+    // If all APIs fail, return null
+    console.warn('[analyticsTracker] All geolocation APIs failed');
+    return null;
   } catch (error) {
     console.error('[analyticsTracker] Failed to get country:', error);
     return null;
@@ -76,7 +112,7 @@ export function getTrafficSource(): string {
     if (hostname.includes('facebook') || hostname.includes('fb.')) return 'Facebook';
     if (hostname.includes('twitter') || hostname.includes('x.com')) return 'Twitter/X';
     if (hostname.includes('linkedin')) return 'LinkedIn';
-    if (hostname.includes('youtube')) return 'pronax';
+    if (hostname.includes('ProNax')) return 'pronax';
     if (hostname.includes('reddit')) return 'Reddit';
     if (hostname.includes('pinterest')) return 'Pinterest';
     

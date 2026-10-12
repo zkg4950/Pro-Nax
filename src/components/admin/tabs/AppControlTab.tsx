@@ -1,11 +1,12 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Loader2, Palette, Upload, Radio, Film, MessageCircle, Megaphone, Wallet, Download, GripVertical, Home, HardDrive, ShieldCheck, Check, Server, RefreshCw } from 'lucide-react';
+import { Save, Loader2, Palette, Upload, Radio, Film, MessageCircle, Megaphone, Wallet, Download, GripVertical, Home, HardDrive, ShieldCheck, Check, Server, RefreshCw, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase as _supabase } from '@/integrations/supabase/loose';
 import { useAppSettings, DEFAULT_APP_SETTINGS, type AppSettings } from '@/hooks/useAppSettings';
 import { getItem, setItem, removeItem } from '@/lib/safeStorage';
+import { updateStorageConfig, validateStorageConfig } from '@/lib/storage-config';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supabase: any = _supabase;
 
@@ -51,43 +52,115 @@ export function AppControlTab() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRemoteRef = useRef<string>('');
 
-  // Cloudflare R2 Storage State
-  const [r2AccountId, setR2AccountId] = useState('8f92a10b471c2e01a884');
-  const [r2BucketName, setR2BucketName] = useState('pronax-video-storage-vault');
-  const [r2AccessKey, setR2AccessKey] = useState('r2_key_pronax_live_772091');
-  const [r2SecretKey, setR2SecretKey] = useState('••••••••••••••••••••••••••••••••');
-  const [r2CdnDomain, setR2CdnDomain] = useState('https://cdn.pronax.tv');
+  // Cloudflare R2 Storage State - No hardcoded credentials
+  const [r2AccountId, setR2AccountId] = useState('');
+  const [r2BucketName, setR2BucketName] = useState('');
+  const [r2AccessKey, setR2AccessKey] = useState('');
+  const [r2SecretKey, setR2SecretKey] = useState('');
+  const [r2CdnDomain, setR2CdnDomain] = useState('');
   const [r2Provider, setR2Provider] = useState('cloudflare_r2');
   const [r2ChunkedUploads, setR2ChunkedUploads] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
-    setR2AccountId(getItem('pronax_r2_account_id', '8f92a10b471c2e01a884'));
-    setR2BucketName(getItem('pronax_r2_bucket', 'pronax-video-storage-vault'));
-    setR2AccessKey(getItem('pronax_r2_access_key', 'r2_key_pronax_live_772091'));
+    // Load from secure storage only - no hardcoded defaults
+    setR2AccountId(getItem('pronax_r2_account_id', ''));
+    setR2BucketName(getItem('pronax_r2_bucket', ''));
+    setR2AccessKey(getItem('pronax_r2_access_key', ''));
     const raw = sessionStorage.getItem('pronax_r2_secret_session');
     if (raw) setR2SecretKey(raw);
-    setR2CdnDomain(getItem('pronax_r2_cdn_domain', 'https://cdn.pronax.tv'));
+    setR2CdnDomain(getItem('pronax_r2_cdn_domain', ''));
     setR2Provider(getItem('pronax_r2_provider', 'cloudflare_r2'));
     setR2ChunkedUploads(getItem('pronax_r2_chunked') !== 'false');
   }, []);
 
-  const saveR2StorageSettings = () => {
-    setItem('pronax_r2_account_id', r2AccountId);
-    setItem('pronax_r2_bucket', r2BucketName);
-    setItem('pronax_r2_access_key', r2AccessKey);
-    // Store secret in encrypted session storage rather than plain localStorage to prevent XSS leaks
-    if (r2SecretKey && !r2SecretKey.includes('•')) {
-      sessionStorage.setItem('pronax_r2_secret_session', r2SecretKey);
+  const validateR2Credentials = (): boolean => {
+    setValidationError(null);
+    
+    if (!r2AccountId.trim()) {
+      setValidationError('R2 Account ID is required');
+      return false;
     }
-    removeItem('pronax_r2_secret_key'); // Remove legacy plaintext key
-    setItem('pronax_r2_cdn_domain', r2CdnDomain);
-    setItem('pronax_r2_provider', r2Provider);
-    setItem('pronax_r2_chunked', String(r2ChunkedUploads));
-    toast.success('Cloudflare R2 Storage Credentials Saved Securely!', {
-      description: `Targeting bucket "${r2BucketName}" on CDN domain ${r2CdnDomain}`,
-    });
+    if (!r2BucketName.trim()) {
+      setValidationError('R2 Bucket Name is required');
+      return false;
+    }
+    if (!r2AccessKey.trim()) {
+      setValidationError('R2 Access Key is required');
+      return false;
+    }
+    if (!r2SecretKey.trim() || r2SecretKey.includes('•')) {
+      setValidationError('R2 Secret Key is required');
+      return false;
+    }
+    if (!r2CdnDomain.trim()) {
+      setValidationError('CDN Domain is required');
+      return false;
+    }
+    
+    // Validate URL format for CDN domain
+    try {
+      new URL(r2CdnDomain);
+    } catch {
+      setValidationError('CDN Domain must be a valid URL');
+      return false;
+    }
+    
+    return true;
+  };
+
+  const saveR2StorageSettings = async () => {
+    if (!validateR2Credentials()) {
+      toast.error('Invalid Credentials', {
+        description: validationError || 'Please check all required fields',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Call secure backend API using the new storage-config functions
+      const result = await updateStorageConfig({
+        provider: r2Provider,
+        account_id: r2AccountId,
+        bucket_name: r2BucketName,
+        access_key: r2AccessKey,
+        secret_key: r2SecretKey,
+        cdn_domain: r2CdnDomain,
+        chunked_uploads: r2ChunkedUploads
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update storage configuration');
+      }
+
+      // Only store non-sensitive configuration locally
+      setItem('pronax_r2_account_id', r2AccountId);
+      setItem('pronax_r2_bucket', r2BucketName);
+      setItem('pronax_r2_cdn_domain', r2CdnDomain);
+      setItem('pronax_r2_provider', r2Provider);
+      setItem('pronax_r2_chunked', String(r2ChunkedUploads));
+      
+      // Clear sensitive data from memory and session storage
+      setR2SecretKey('••••••••••••••••••••••••••••••••');
+      sessionStorage.removeItem('pronax_r2_secret_session');
+      removeItem('pronax_r2_secret_key');
+
+      toast.success('Storage Configuration Updated', {
+        description: result.message || `R2 settings saved securely for bucket "${r2BucketName}"`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save storage configuration';
+      toast.error('Configuration Error', {
+        description: message,
+      });
+      console.error('[Storage Config] Save failed:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Hydrate from remote; also accept remote updates as long as user hasn't touched local yet
@@ -192,12 +265,19 @@ export function AppControlTab() {
             </div>
             <button
               onClick={saveR2StorageSettings}
-              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 cursor-pointer transition"
+              disabled={loading}
+              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="w-3.5 h-3.5" />
-              Save R2 Storage Config
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              {loading ? 'Saving...' : 'Save R2 Storage Config'}
             </button>
           </div>
+
+          {validationError && (
+            <div className="mb-3 p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+              {validationError}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Field label="Storage Provider">
@@ -217,7 +297,7 @@ export function AppControlTab() {
               <input
                 value={r2AccountId}
                 onChange={(e) => setR2AccountId(e.target.value)}
-                placeholder="8f92a10b471c2e01a884"
+                placeholder="Enter your R2 Account ID"
                 className={inputCls}
               />
             </Field>
@@ -226,7 +306,7 @@ export function AppControlTab() {
               <input
                 value={r2BucketName}
                 onChange={(e) => setR2BucketName(e.target.value)}
-                placeholder="pronax-video-storage-vault"
+                placeholder="Enter bucket name"
                 className={`${inputCls} font-mono text-cyan-300`}
               />
             </Field>
@@ -235,7 +315,7 @@ export function AppControlTab() {
               <input
                 value={r2AccessKey}
                 onChange={(e) => setR2AccessKey(e.target.value)}
-                placeholder="r2_access_key_123"
+                placeholder="Enter access key ID"
                 className={inputCls}
               />
             </Field>
@@ -245,7 +325,7 @@ export function AppControlTab() {
                 type="password"
                 value={r2SecretKey}
                 onChange={(e) => setR2SecretKey(e.target.value)}
-                placeholder="••••••••••••••••"
+                placeholder="Enter secret access key"
                 className={inputCls}
               />
             </Field>
@@ -254,7 +334,7 @@ export function AppControlTab() {
               <input
                 value={r2CdnDomain}
                 onChange={(e) => setR2CdnDomain(e.target.value)}
-                placeholder="https://cdn.pronax.tv"
+                placeholder="https://your-cdn-domain.com"
                 className={`${inputCls} font-mono text-cyan-300`}
               />
             </Field>
@@ -262,8 +342,10 @@ export function AppControlTab() {
 
           <div className="pt-2 flex items-center justify-between border-t border-white/10 mt-3">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs text-slate-300 font-mono">Status: Connected to Cloudflare R2 ({r2BucketName})</span>
+              <span className={`w-2 h-2 rounded-full ${r2AccountId && r2BucketName ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+              <span className="text-xs text-slate-300 font-mono">
+                Status: {r2AccountId && r2BucketName ? `Connected to Cloudflare R2 (${r2BucketName})` : 'Not configured'}
+              </span>
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer">

@@ -10,6 +10,7 @@ import { motion } from 'framer-motion';
 import { Sparkles, SkipForward } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useImaAds } from '@/hooks/useImaAds';
+import { useAdSlot } from '@/hooks/useAdSlot';
 
 interface ShortsAdSlideProps {
   active: boolean;
@@ -17,7 +18,7 @@ interface ShortsAdSlideProps {
   onAdFinished: () => void;
 }
 
-const SHORTS_VAST_URL = import.meta.env.VITE_SHORTS_VAST_URL as string | undefined;
+const ENV_SHORTS_VAST_URL = import.meta.env.VITE_SHORTS_VAST_URL as string | undefined;
 const SKIP_AFTER_SECONDS = 5;
 
 export function ShortsAdSlide({ active, attributeToVideoId, onAdFinished }: ShortsAdSlideProps) {
@@ -26,6 +27,11 @@ export function ShortsAdSlide({ active, attributeToVideoId, onAdFinished }: Shor
   const [skipReady, setSkipReady] = useState(false);
   const [countdown, setCountdown] = useState(SKIP_AFTER_SECONDS);
   const [imaStarted, setImaStarted] = useState(false);
+
+  // Admin-managed placement ("shorts_between") wins; env var is the fallback.
+  const { row: slotRow } = useAdSlot('shorts_between');
+  const SHORTS_VAST_URL =
+    (slotRow?.enabled ? slotRow.vast_tag_url || undefined : undefined) ?? ENV_SHORTS_VAST_URL;
 
   const ima = useImaAds({
     vastTagUrl: SHORTS_VAST_URL,
@@ -55,7 +61,7 @@ export function ShortsAdSlide({ active, attributeToVideoId, onAdFinished }: Shor
     }, 1000);
     return () => { clearInterval(t); ima.cleanup(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+  }, [active, SHORTS_VAST_URL]);
 
   return (
     <section className="relative w-full h-full snap-start snap-always flex items-center justify-center bg-black overflow-hidden">

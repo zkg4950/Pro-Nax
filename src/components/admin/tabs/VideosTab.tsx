@@ -38,10 +38,11 @@ export function VideosTab() {
       description: 'Are you sure you want to remove this video? This action cannot be undone.',
       destructive: true,
       run: async () => {
-        const { error } = await supabase
-          .from('videos')
-          .update({ is_removed: true, moderation_reason: 'Removed by admin' })
-          .eq('id', videoId);
+        const { error } = await supabase.rpc('admin_moderate_video', {
+          p_video: videoId,
+          p_action: 'remove',
+          p_reason: 'Removed by admin'
+        });
 
         if (error) {
           toast.error(error.message);
@@ -53,10 +54,12 @@ export function VideosTab() {
   };
 
   const shadowBanVideo = async (videoId: string, isShadowBanned: boolean) => {
-    const { error } = await supabase
-      .from('videos')
-      .update({ is_shadow_banned: !isShadowBanned })
-      .eq('id', videoId);
+    const action = isShadowBanned ? 'unshadowban' : 'shadowban';
+    const { error } = await supabase.rpc('admin_moderate_video', {
+      p_video: videoId,
+      p_action: action,
+      p_reason: null
+    });
 
     if (error) {
       toast.error(error.message);

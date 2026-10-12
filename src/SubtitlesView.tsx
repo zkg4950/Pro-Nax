@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
-import { geminiFetch } from "../geminiClient";
+import { geminiFetch } from "@/pronax-studio/geminiClient";
 import React, { useState } from "react";
 import {
   Captions,
@@ -11,7 +11,7 @@ import {
   Loader2,
   FileText,
 } from "lucide-react";
-import { Video, SubtitleTrack, SubtitleItem } from "../types";
+import { Video, SubtitleTrack, SubtitleItem } from "@/pronax-studio/types";
 
 interface SubtitlesViewProps {
   videos: Video[];

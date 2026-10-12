@@ -32,18 +32,18 @@ const TTL = {
 export interface CachedVideo {
   id: string;
   title: string;
-  description: string;
-  thumb_url: string;
+  description: string | null;
+  thumb_url: string | null;
   video_url: string;
-  duration_seconds: number;
+  duration_seconds: number | null;
   visibility: string;
-  monetization_enabled: boolean;
+  monetization_enabled: boolean | null;
   created_at: string;
-  views_count: number;
-  comments_count: number;
-  likes: number;
-  tags: string[];
-  category: string;
+  views_count: number | null;
+  comments_count: number | null;
+  likes: number | null;
+  tags: string[] | null;
+  category: string | null;
   is_short: boolean;
   // Add other video fields as needed
 }

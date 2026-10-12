@@ -105,7 +105,7 @@ export function SmartSearch() {
     setQ('');
     nav({
       to: '/search',
-      search: { q: term.trim() },
+      search: { q: term.trim() } as never,
     });
   };
 

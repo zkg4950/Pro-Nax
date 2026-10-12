@@ -14,6 +14,12 @@ export default defineConfig({
   server: {
     port: 8080,
     host: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+      },
+    },
   },
   plugins: [
     tailwindcss(),

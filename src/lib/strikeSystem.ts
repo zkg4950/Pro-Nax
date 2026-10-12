@@ -39,8 +39,10 @@ export async function getUserStrikeStatus(userId: string): Promise<UserStrikeSta
 
     if (error) throw error;
 
-    const activeStrikes = (strikes || []).filter(
-      (strike: Strike) => !strike.expires_at || new Date(strike.expires_at) > new Date()
+    const typedStrikes = (strikes || []) as unknown as Strike[];
+
+    const activeStrikes = typedStrikes.filter(
+      (strike) => !strike.expires_at || new Date(strike.expires_at) > new Date()
     );
 
     const totalStrikes = activeStrikes.length;
@@ -56,15 +58,15 @@ export async function getUserStrikeStatus(userId: string): Promise<UserStrikeSta
 
     // Check for active suspension
     const activeSuspension = activeStrikes.find(
-      (strike: Strike) => strike.severity === 'strike2' && strike.expires_at && new Date(strike.expires_at) > new Date()
+      (strike) => strike.severity === 'strike2' && strike.expires_at && new Date(strike.expires_at) > new Date()
     );
 
     return {
       active_strikes: totalStrikes,
-      total_strikes: (strikes || []).length,
+      total_strikes: typedStrikes.length,
       strike_history: activeStrikes,
       status,
-      suspension_until: activeSuspension?.expires_at,
+      suspension_until: activeSuspension?.expires_at ?? undefined,
     };
   } catch (error) {
     console.error('Error getting user strike status:', error);
@@ -126,7 +128,7 @@ export async function addStrikeToUser(
         video_id: videoId,
         expires_at: expiresAt,
         acknowledged: false,
-      })
+      } as never)
       .select()
       .maybeSingle();
 
@@ -168,8 +170,8 @@ export async function addStrikeToUser(
       type: 'strike',
       title: `Community Guidelines Strike - ${newSeverity.toUpperCase()}`,
       message: getStrikeMessage(newSeverity, reason),
-      metadata: { strike_id: strike.id, severity: newSeverity },
-    });
+      metadata: { strike_id: (strike as { id: string }).id, severity: newSeverity },
+    } as never);
 
     return {
       success: true,
@@ -192,7 +194,7 @@ export async function acknowledgeStrike(strikeId: string, userId: string): Promi
   try {
     const { error } = await supabase
       .from('user_strikes')
-      .update({ acknowledged: true })
+      .update({ acknowledged: true } as never)
       .eq('id', strikeId)
       .eq('user_id', userId);
 
@@ -213,9 +215,9 @@ export async function cleanupExpiredStrikes(): Promise<number> {
     
     const { error } = await supabase
       .from('user_strikes')
-      .update({ acknowledged: true }) // Mark as acknowledged so they don't count
+      .update({ acknowledged: true } as never) // Mark as acknowledged so they don't count
       .lt('expires_at', now)
-      .eq('acknowledged', false);
+      .eq('acknowledged' as never, false);
 
     if (error) throw error;
     

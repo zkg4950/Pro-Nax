@@ -605,7 +605,7 @@ function ShortItem({
             shortId={short.id}
             title={short.title}
             onShareClick={() => { void recordShare(short.id, 'link'); }}
-            variant="tiktok"
+            variant="pronax"
             shareCount={short.shares}
             formatCount={formatCount}
           />

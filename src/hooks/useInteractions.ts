@@ -45,12 +45,12 @@ export function useLike(videoId: string, creatorId?: string | null) {
     }
   }, [videoId]);
 
-  // Periodic refresh to ensure sync across different accounts/sessions
+  // No polling: realtime pushes updates, and we re-sync when the tab regains
+  // focus. Polling every viewer every few seconds does not survive scale.
   useEffect(() => {
-    const interval = setInterval(() => {
-      refresh();
-    }, 5000); // Refresh every 5 seconds
-    return () => clearInterval(interval);
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -124,12 +124,12 @@ export function useSave(videoId: string) {
     }
   }, [videoId]);
 
-  // Periodic refresh to ensure sync across different accounts/sessions
+  // No polling: realtime pushes updates, and we re-sync when the tab regains
+  // focus. Polling every viewer every few seconds does not survive scale.
   useEffect(() => {
-    const interval = setInterval(() => {
-      refresh();
-    }, 5000); // Refresh every 5 seconds
-    return () => clearInterval(interval);
+    const onVisible = () => { if (!document.hidden) refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -346,12 +346,14 @@ export interface DbNotification {
   payload: any;
   read_at: string | null;
   created_at: string;
+  action_url?: string | null;
 }
 
 export function useNotifications() {
   const [items, setItems] = useState<DbNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
+  const channelInstanceId = useRef(`instance-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
@@ -379,7 +381,10 @@ export function useNotifications() {
   useEffect(() => {
     if (!userId) return;
     const ch = supabase
-      .channel(`notifications:${userId}`)
+      // AppHeader mounts desktop and mobile bells together (CSS controls visibility),
+      // so each hook instance needs its own topic. Reusing a subscribed topic makes
+      // the realtime client reject a second postgres_changes callback.
+      .channel(`notifications:${userId}:${channelInstanceId.current}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, load)
       .subscribe((status) => {
         if (status === 'SUBSCRIPTION_ERROR') {

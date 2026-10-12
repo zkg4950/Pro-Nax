@@ -31,6 +31,7 @@ import { InVideoAdOverlay } from '@/components/InVideoAdOverlay';
 import { useVastPreRoll } from '@/hooks/useVastPreRoll';
 import { EngineBoundary } from '@/components/EngineBoundary';
 import { LiveWatcherBadge } from '@/components/LiveWatcherBadge';
+import { useWatchHeartbeat } from '@/hooks/useWatchHeartbeat';
 
 
 
@@ -56,6 +57,7 @@ type DbVideoRow = {
   views_count: number | null;
   duration_seconds: number | null;
   is_short: boolean | null;
+  category: string | null;
 };
 
 
@@ -88,6 +90,9 @@ export default function Watch() {
   const [dbVideo, setDbVideo] = useState<DbVideoRow | null>(null);
   const [dbCreatorName, setDbCreatorName] = useState<string | null>(null);
   const [dbCreatorAvatar, setDbCreatorAvatar] = useState<string | null>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+  const [userDisplayName, setUserDisplayName] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [dbCreatorId, setDbCreatorId] = useState<string | null>(null);
   const [dbSubtitles, setDbSubtitles] = useState<{ label: string; language: string; src: string; kind?: 'subtitles' | 'captions'; default?: boolean }[]>([]);
   
@@ -102,7 +107,7 @@ export default function Watch() {
     (async () => {
       const { data: vrow } = await supabase
         .from('videos')
-        .select('id,title,description,video_url,thumb_url,owner_id,created_at,views_count,duration_seconds,is_short')
+        .select('id,title,description,video_url,thumb_url,owner_id,created_at,views_count,duration_seconds,is_short,category')
         .eq('id', videoId as any)
         .maybeSingle();
       if (cancelled || !vrow) return;
@@ -168,9 +173,18 @@ export default function Watch() {
     console.log('Sending view impression for video:', videoId);
     // Send impression immediately when video page loads
     analyticsBus.impression(videoId, 'watch');
-    // Also directly record view to ensure count increments
-    recordView(videoId, 0).catch(err => console.error('Failed to record view:', err));
+    
+    // Also record an immediate view for better counting
+    // This ensures views are counted even if user doesn't watch for 5 seconds
+    (async () => {
+      try {
+        await recordView(videoId, 0);
+      } catch (err) {
+        console.error('Failed to record initial view:', err);
+      }
+    })();
   }, [videoId]);
+  useWatchHeartbeat({ videoId: isUuid(videoId) ? videoId : null, isPlaying });
   const video = useMemo(() => {
     const viewsCount = dbVideo?.views_count;
     return {
@@ -196,6 +210,22 @@ export default function Watch() {
   useEffect(() => {
     console.log('Follow button check:', { userId: user?.id, dbCreatorId, isOwn: user?.id === dbCreatorId });
   }, [user?.id, dbCreatorId]);
+
+  // Fetch user profile data for avatar in comments
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    supabase.from('profiles').select('avatar_url, display_name').eq('id', user.id).maybeSingle().then(({ data, error }) => {
+      if (!error && data) {
+        setUserAvatar(data.avatar_url ?? null);
+        setUserDisplayName(data.display_name ?? null);
+      } else {
+        // Fallback to auth metadata
+        setUserAvatar(user.user_metadata?.avatar_url ?? null);
+        setUserDisplayName(user.user_metadata?.display_name ?? null);
+      }
+    });
+  }, [user?.id]);
 
   // Related videos engine — tags + category + co-watch signals
   useEffect(() => {
@@ -249,6 +279,10 @@ export default function Watch() {
 
   // View count trigger fires once user has actively watched ≥ 5s (from player).
   const handleWatchThreshold = async () => {
+    // Optimistic UI update - increment view count immediately
+    setDbVideo(prev => prev ? { ...prev, views_count: (prev.views_count || 0) + 1 } : null);
+    
+    // Record the view in database
     await recordView(videoId, 5);
     supabase.rpc('record_watch_history', { p_video: videoId, p_watch_seconds: 5 });
   };
@@ -342,16 +376,28 @@ export default function Watch() {
     }
 
     // Fallback path: legacy ad SDK impression → record_ad_view (60/40 network flow)
-    const impression = await requestAdImpression({ videoId });
+    const impression = await requestAdImpression({
+      videoId,
+      placementType: 'long_form',
+      isShort: false,
+      category: dbVideo?.category || undefined,
+    });
     if (!impression.filled) {
       toast({ title: 'Ad slot unfilled', description: 'No live ad served this round.' });
       return;
     }
-    const { data, error } = await supabase.rpc('record_ad_view', {
+    const { data, error } = await supabase.rpc('record_ad_view_by_placement', {
       p_video_id: videoId,
       p_ad_revenue: impression.revenue,
       p_ad_network: impression.network,
-      p_cpm: impression.cpm,
+      p_cpm: impression.adjustedCpm || impression.cpm,
+      p_country_code: impression.countryCode || null,
+      p_country_name: impression.countryName || null,
+      p_country_tier: impression.countryTier || null,
+      p_placement_type: 'long_form',
+      p_category: impression.category || null,
+      p_category_multiplier: impression.categoryMultiplier || null,
+      p_category_tier: impression.categoryTier || null,
     });
     if (error) {
       toast({ title: 'Reward failed', description: error.message, variant: 'destructive' });
@@ -361,7 +407,7 @@ export default function Watch() {
     if (result?.paid) {
       toast({
         title: `+$${(result.creator_share ?? 0).toFixed(6)} credited 💰`,
-        description: `Live ${impression.network.replace('_', ' ')} ad · CPM $${impression.cpm.toFixed(2)}.`,
+        description: `Live ${impression.network.replace('_', ' ')} ad · CPM $${impression.cpm.toFixed(2)}${impression.countryName ? ` · ${impression.countryName}` : ''}.`,
       });
     } else if (result?.reason === 'daily_cap_reached') {
       toast({ title: 'Daily view cap reached', description: 'Max 3 paid views per video per 24h.' });
@@ -524,6 +570,7 @@ export default function Watch() {
               theater={theater}
               onTheaterToggle={() => setTheater((v) => !v)}
               onWatchThreshold={handleWatchThreshold}
+              onPlaybackChange={setIsPlaying}
               watchThreshold={5}
               onVideoEnded={handleVideoEnded}
               onWatchProgress={(seconds) => {
@@ -602,7 +649,7 @@ export default function Watch() {
             {/* Channel + action icons in one scrollable row */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-3 px-3 md:mx-0 md:px-0">
               <Link
-                to={`/channel/${encodeURIComponent(video.channel)}`}
+                to={dbCreatorId ? `/profile/${dbCreatorId}` : '/profile'}
                 className="shrink-0 w-9 h-9 rounded-full bg-muted flex items-center justify-center text-xs font-display font-bold text-foreground overflow-hidden"
                 aria-label={`@${video.channel}`}
               >
@@ -831,10 +878,10 @@ export default function Watch() {
                   {/* Comment Input */}
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden">
-                      {user?.user_metadata?.avatar_url ? (
-                        <img src={user.user_metadata.avatar_url} alt="Your avatar" className="w-full h-full object-cover" />
+                      {userAvatar ? (
+                        <img src={userAvatar} alt="Your avatar" className="w-full h-full object-cover" />
                       ) : (
-                        user?.user_metadata?.display_name?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'Y'
+                        userDisplayName?.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'Y'
                       )}
                     </div>
                     <div className="flex-1">

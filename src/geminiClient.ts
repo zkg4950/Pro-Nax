@@ -117,6 +117,21 @@ export interface CopyrightEvaluationResult {
   };
 }
 
+export interface CreatorCoachResult {
+  advice: string;
+  suggestions: string[];
+  actionItems: string[];
+  estimatedImpact: string;
+  viralIdeas?: string[];
+  titleExamples?: string[];
+  scriptTemplate?: {
+    hook: string;
+    value: string;
+    engagement: string;
+    cta: string;
+  };
+}
+
 // ---------- Actions ----------
 
 export function analyzeVideoContentQuality(videoData: {
@@ -181,6 +196,14 @@ export function evaluateCopyrightDisputeWithAI(input: {
   claimant?: string | null;
 }): Promise<AIResult<CopyrightEvaluationResult>> {
   return callAI<CopyrightEvaluationResult>('detect-copyright', input);
+}
+
+export function creatorCoachWithAI(request: {
+  request: string;
+  metrics?: Record<string, unknown>;
+  recentVideos?: Array<unknown>;
+}): Promise<AIResult<CreatorCoachResult>> {
+  return callAI<CreatorCoachResult>('creator-coach', request);
 }
 
 /**

@@ -24,7 +24,7 @@ export function useVideoShare() {
           p_video_id: videoId,
           p_user_id: finalUserId,
           p_platform: platform,
-          p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+          p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
         });
       } catch (error) {
         console.error('Failed to record video share:', error);

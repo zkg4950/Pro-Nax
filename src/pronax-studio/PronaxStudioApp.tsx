@@ -26,15 +26,35 @@ import { AIAssistantDrawer } from "./components/AIAssistantDrawer";
 import { ViewMode, Video, AudioTrack, ChannelStats, SubtitleTrack } from "./types";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useLiveStudio } from "./useLiveStudio";
+import { useAuthSession } from "@/hooks/useAuthSession";
+import { UniversalLoginModal } from "@/components/UniversalLoginModal";
+import { Loader2, AlertCircle, Clock, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { 
+  studioVideoToEditorVideo, 
+  editorVideoToStudioVideo, 
+  validateStudioVideo,
+  validateEditorVideo 
+} from "./utils/videoTypeConversion";
 
 export default function App() {
+  const { isAuthenticated, user, openAuthModal, closeAuthModal, isAuthModalOpen, signOut } = useAuthSession();
   const [currentView, setCurrentView] = useState<ViewMode>("dashboard");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Live data from the backend (videos, comments, channel stats)
   const live = useLiveStudio();
-  const channelStats: ChannelStats | null = live.isAuthed ? (live.channelStats ?? {
+  const {
+    channelStats,
+    videos,
+    comments,
+    realUsers,
+    authLoading,
+  } = live;
+
+  // Fallback values when not authenticated
+  const safeChannelStats: ChannelStats = channelStats ?? {
     name: "",
     handle: "",
     avatar: "",
@@ -46,10 +66,10 @@ export default function App() {
     estimatedRevenue28Days: 0,
     realtime48HoursViews: 0,
     realtime60MinsViews: 0,
-  }) : null;
-  const videos = live.isAuthed ? live.videos : [];
-  const comments = live.isAuthed ? live.comments : [];
-  const realUsers = live.isAuthed ? live.realUsers : [];
+  };
+  const safeVideos = isAuthenticated ? videos : [];
+  const safeComments = isAuthenticated ? comments : [];
+  const safeRealUsers = isAuthenticated ? realUsers : [];
 
   // Local-only libraries (no backend tables yet)
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
@@ -84,6 +104,8 @@ export default function App() {
 
   const [editingVideo, setEditingVideo] = useState<Video | null>(null);
   const [editorVideo, setEditorVideo] = useState<Video | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [isEditorLoading, setIsEditorLoading] = useState(false);
   const [copyrightVideo, setCopyrightVideo] = useState<Video | null>(null);
   const [isLiveControlRoomOpen, setIsLiveControlRoomOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -111,13 +133,41 @@ export default function App() {
     }
   };
 
-  const handlePublishNewVideo = (newVideo: Video) => {
-    live.setVideos((prev) => [newVideo, ...prev]);
-    void live.refresh();
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Sign out failed:', error);
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   const handleSaveVideo = (updatedVideo: Video) => {
-    void live.saveVideo(updatedVideo);
+    try {
+      // Check if this is an editor video that needs conversion
+      if (editorVideo && updatedVideo.id === editorVideo.id) {
+        // Validate editor video data
+        const validation = validateEditorVideo(updatedVideo as any);
+        if (!validation.valid) {
+          setEditorError(`Cannot save video: ${validation.errors.join(', ')}`);
+          console.error('Editor video validation failed:', validation.errors);
+          return;
+        }
+
+        // Convert back to studio format
+        const studioFormatVideo = editorVideoToStudioVideo(updatedVideo as any, editorVideo as any);
+        void live.saveVideo(studioFormatVideo);
+      } else {
+        // Direct save for regular video edits
+        void live.saveVideo(updatedVideo);
+      }
+    } catch (error) {
+      setEditorError(error instanceof Error ? error.message : 'Failed to save video');
+      console.error('Error saving video:', error);
+    }
   };
 
   const handleDeleteVideo = (videoId: string) => {
@@ -182,24 +232,23 @@ export default function App() {
 
       {/* Top Navigation Header */}
       <Header
-        channelStats={channelStats}
+        channelStats={safeChannelStats}
         onToggleSidebar={handleToggleSidebar}
         onOpenUploadModal={handleTriggerUpload}
         onOpenLiveControlRoom={() => setIsLiveControlRoomOpen(true)}
         onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
         searchQuery={globalSearch}
         onSearchChange={setGlobalSearch}
-        isAuthed={live.isAuthed}
       />
 
       {/* Main Container */}
       <div className="flex flex-1 relative">
         {/* Sidebar Menu - Only show when authenticated */}
-        {live.isAuthed && (
+        {isAuthenticated && (
           <Sidebar
             currentView={currentView}
             onSelectView={handleSelectView}
-            channelStats={channelStats}
+            channelStats={safeChannelStats}
             isCollapsed={isSidebarCollapsed}
             isMobileOpen={isMobileSidebarOpen}
             onCloseMobile={() => setIsMobileSidebarOpen(false)}
@@ -207,18 +256,18 @@ export default function App() {
         )}
 
         {/* View Content Canvas */}
-        <main className={`flex-1 min-w-0 bg-[#0f0f0f] overflow-x-hidden ${!live.isAuthed ? 'w-full' : ''}`}>
+        <main className={`flex-1 min-w-0 bg-[#0f0f0f] overflow-x-hidden ${!isAuthenticated ? 'w-full' : ''}`}>
           <ErrorBoundary>
-            {live.loading && (
+            {authLoading && (
               <div className="flex items-center justify-center min-h-[50vh]">
                 <div className="text-center">
                   <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mb-4"></div>
-                  <p className="text-gray-400 text-sm">Loading studio data...</p>
+                  <p className="text-gray-400 text-sm">Loading authentication...</p>
                 </div>
               </div>
             )}
 
-            {!live.authLoading && !live.isAuthed && (
+            {!authLoading && !isAuthenticated && (
               <div className="flex flex-col items-center justify-center min-h-[60vh] p-8">
                 <div className="text-center max-w-md">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
@@ -228,24 +277,42 @@ export default function App() {
                   </div>
                   <h2 className="text-xl font-bold text-white mb-2">Sign in to access Studio</h2>
                   <p className="text-sm text-gray-400 mb-6">Manage your videos, analytics, and revenue with ProNax Studio.</p>
-                  <a
-                    href="/auth"
-                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-red-500 text-white font-semibold text-sm hover:from-red-500 hover:to-red-400 transition-all shadow-lg"
+                  <button
+                    onClick={openAuthModal}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-red-500 text-white font-semibold text-sm hover:from-red-500 hover:to-red-400 transition-all shadow-lg cursor-pointer"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                     </svg>
                     Sign in to Studio
-                  </a>
+                  </button>
                 </div>
               </div>
             )}
 
-            {live.isAuthed && !live.loading && currentView === "dashboard" && (
+            {isAuthenticated && live.loading && (
+              <div className="flex items-center justify-center min-h-[50vh]">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mb-4"></div>
+                  <p className="text-gray-400 text-sm">Loading studio data...</p>
+                </div>
+              </div>
+            )}
+
+            {isAuthenticated && live.loading && (
+              <div className="flex items-center justify-center min-h-[50vh]">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mb-4"></div>
+                  <p className="text-gray-400 text-sm">Loading studio data...</p>
+                </div>
+              </div>
+            )}
+
+            {isAuthenticated && currentView === "dashboard" && (
               <DashboardView
-                channelStats={channelStats}
-                latestVideo={videos[0]}
-                allVideos={videos}
+                channelStats={safeChannelStats}
+                latestVideo={safeVideos[0]}
+                allVideos={safeVideos}
                 onOpenUploadModal={handleTriggerUpload}
                 onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
                 onSelectVideoForAnalytics={handleOpenVideoAnalytics}
@@ -253,12 +320,35 @@ export default function App() {
               />
             )}
 
-            {live.isAuthed && !live.loading && currentView === "content" && (
+            {isAuthenticated && currentView === "content" && (
               <ContentView
-                videos={videos}
+                videos={safeVideos}
                 onOpenUploadModal={handleTriggerUpload}
                 onEditVideo={(v) => setEditingVideo(v)}
-                onOpenEditor={(v) => setEditorVideo(v)}
+                onOpenEditor={(v) => {
+                  try {
+                    // Validate video data before opening editor
+                    const validation = validateStudioVideo(v);
+                    if (!validation.valid) {
+                      setEditorError(`Cannot open editor: ${validation.errors.join(', ')}`);
+                      console.error('Video validation failed:', validation.errors);
+                      return;
+                    }
+
+                    // Clear any previous errors
+                    setEditorError(null);
+                    setIsEditorLoading(true);
+
+                    // Convert to editor format
+                    const editorFormatVideo = studioVideoToEditorVideo(v);
+                    setEditorVideo(editorFormatVideo as any); // Temporary cast until we update the component
+                    setIsEditorLoading(false);
+                  } catch (error) {
+                    setEditorError(error instanceof Error ? error.message : 'Failed to open video editor');
+                    setIsEditorLoading(false);
+                    console.error('Error opening video editor:', error);
+                  }
+                }}
                 onOpenCopyrightModal={(v) => setCopyrightVideo(v)}
                 onSelectVideoAnalytics={handleOpenVideoAnalytics}
                 onDeleteVideo={handleDeleteVideo}
@@ -266,45 +356,45 @@ export default function App() {
               />
             )}
 
-            {live.isAuthed && !live.loading && currentView === "analytics" && (
+            {isAuthenticated && currentView === "analytics" && (
               <AnalyticsView
-                channelStats={channelStats}
+                channelStats={safeChannelStats}
                 selectedVideo={selectedVideoForAnalytics}
                 onClearSelectedVideo={() => setSelectedVideoForAnalytics(null)}
               />
             )}
 
-            {live.isAuthed && !live.loading && currentView === "comments" && (
+            {isAuthenticated && currentView === "comments" && (
               <CommentsView
-                comments={comments}
+                comments={safeComments}
                 onAddReply={handleAddCommentReply}
                 onToggleHeart={handleToggleHeartComment}
                 onDeleteComment={handleDeleteComment}
               />
             )}
 
-            {live.isAuthed && !live.loading && currentView === "earn" && (
-              <EarnView channelStats={channelStats} />
+            {isAuthenticated && currentView === "earn" && (
+              <EarnView channelStats={safeChannelStats} />
             )}
 
-            {live.isAuthed && !live.loading && currentView === "customization" && (
+            {isAuthenticated && currentView === "customization" && (
               <CustomizationView
-                channelStats={channelStats}
+                channelStats={safeChannelStats}
                 onUpdateChannelStats={(updated) => void live.updateChannel(updated)}
 
               />
             )}
 
-            {live.isAuthed && !live.loading && currentView === "audio-library" && (
+            {isAuthenticated && currentView === "audio-library" && (
               <AudioLibraryView
                 tracks={audioTracks}
                 onToggleStarTrack={handleToggleStarTrack}
               />
             )}
 
-            {live.isAuthed && !live.loading && currentView === "subtitles" && (
+            {isAuthenticated && currentView === "subtitles" && (
               <SubtitlesView
-                videos={videos}
+                videos={safeVideos}
                 subtitleTracks={subtitleTracks}
                 onSaveTrack={handleSaveSubtitleTrack}
               />
@@ -322,7 +412,7 @@ export default function App() {
         }}
         videoFile={selectedVideoFile}
         onVideoChange={setSelectedVideoFile}
-        onPublishVideo={handlePublishNewVideo}
+        onRefresh={() => void live.refresh()}
       />
 
       {/* Video Details & AI Edit Modal */}
@@ -334,10 +424,41 @@ export default function App() {
       />
 
       {/* Video Studio Editor Modal (Trim / Blur / End Screen) */}
+      {editorError && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80">
+          <div className="bg-red-950/90 border border-red-500/50 p-6 rounded-2xl max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-red-400" />
+              <h3 className="text-lg font-bold text-white">Editor Error</h3>
+            </div>
+            <p className="text-red-200 mb-4">{editorError}</p>
+            <button
+              onClick={() => {
+                setEditorError(null);
+                setEditorVideo(null);
+              }}
+              className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg"
+            >
+              Close Editor
+            </button>
+          </div>
+        </div>
+      )}
+      {isEditorLoading && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-cyan-400 mx-auto mb-4" />
+            <p className="text-white">Loading video editor...</p>
+          </div>
+        </div>
+      )}
       <VideoEditorModal
         video={editorVideo as any}
-        isOpen={!!editorVideo}
-        onClose={() => setEditorVideo(null)}
+        isOpen={!!editorVideo && !editorError && !isEditorLoading}
+        onClose={() => {
+          setEditorVideo(null);
+          setEditorError(null);
+        }}
         onSaveVideo={handleSaveVideo as any}
       />
 
@@ -368,6 +489,12 @@ export default function App() {
       <AIAssistantDrawer
         isOpen={isAIAssistantOpen}
         onClose={() => setIsAIAssistantOpen(false)}
+      />
+
+      {/* Universal Login Modal */}
+      <UniversalLoginModal 
+        isOpen={isAuthModalOpen}
+        onClose={closeAuthModal}
       />
     </div>
   );

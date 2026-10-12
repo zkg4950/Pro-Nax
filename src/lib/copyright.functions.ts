@@ -25,6 +25,7 @@ export async function scanVideoForCopyright(videoId: string, videoUrl: string): 
     };
   }
 
+  let claimsCreated = 0;
   try {
     // Call the FastAPI service to scan the video
     const formData = new FormData();
@@ -66,7 +67,7 @@ export async function scanVideoForCopyright(videoId: string, videoUrl: string): 
               confidence: result.confidence,
               raw_match: result
             }
-          });
+          } as never);
 
         if (!claimError) {
           claimsCreated = 1;

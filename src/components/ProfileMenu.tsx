@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@/lib/router-compat';
-import { User, LogOut, SlidersHorizontal, Settings as SettingsIcon, Sun, Moon, LogIn, Shield, Key, Sparkles, X } from 'lucide-react';
+import { User, LogOut, SlidersHorizontal, Settings as SettingsIcon, Sun, Moon, LogIn, Shield, Key, Sparkles, X, MessageCircle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +27,7 @@ function getInitialTheme(): 'dark' | 'light' {
 }
 
 export function ProfileMenu() {
-  const { user } = useAuthSession();
+  const { user, signOut: authSignOut } = useAuthSession();
   const navigate = useNavigate();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -68,10 +68,14 @@ export function ProfileMenu() {
   const initials = (email.split('@')[0] || 'U').slice(0, 2).toUpperCase();
   const uniqueId = user ? generateUniqueUserId(email || user.id) : '';
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    toast.success('Signed out');
-    navigate('/');
+  async function handleSignOut() {
+    const result = await authSignOut();
+    if (result.success) {
+      toast.success('Signed out');
+      navigate('/');
+    } else {
+      toast.error(result.error || 'Failed to sign out');
+    }
   }
 
   if (!user) {
@@ -134,6 +138,9 @@ export function ProfileMenu() {
           <DropdownMenuItem onClick={() => navigate('/profile')}>
             <User className="w-4 h-4 mr-2" /> Channel Settings
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/inbox')}>
+            <MessageCircle className="w-4 h-4 mr-2" /> Inbox
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => navigate('/studio')}>
             <SlidersHorizontal className="w-4 h-4 mr-2" /> Studio
           </DropdownMenuItem>
@@ -146,7 +153,7 @@ export function ProfileMenu() {
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+          <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
             <LogOut className="w-4 h-4 mr-2" /> Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>

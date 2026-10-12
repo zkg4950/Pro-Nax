@@ -5,7 +5,13 @@
 // type now covers the full schema, so this is a plain typed re-export.
 import { supabase as typedSupabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
 
-export const supabase: SupabaseClient<Database> = typedSupabase;
+// Several optional product modules are newer than the generated schema snapshot.
+// Keep this compatibility client widened until the next full type generation.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const supabase: SupabaseClient<any> = typedSupabase as unknown as SupabaseClient<any>;
 export default supabase;
+
+// Widened client for schema added after the last type generation (messaging, privacy, presence).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const supabaseAny: SupabaseClient<any> = typedSupabase as unknown as SupabaseClient<any>;

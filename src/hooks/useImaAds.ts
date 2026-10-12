@@ -75,13 +75,21 @@ export function useImaAds(opts: UseImaAdsOptions) {
   const creditAdView = useCallback(async () => {
     if (!opts.videoId) return;
     try {
-      const impr = await requestAdImpression({ videoId: opts.videoId });
+      const impr = await requestAdImpression({ 
+        videoId: opts.videoId,
+        placementType: 'shorts', // Explicitly mark as Shorts placement
+        isShort: true
+      });
       if (!impr.filled) return;
-      await supabase.rpc('record_ad_view', {
+      await supabase.rpc('record_ad_view_by_placement', {
         p_video_id: opts.videoId,
         p_ad_revenue: impr.revenue,
         p_ad_network: impr.network,
-        p_cpm: impr.cpm,
+        p_cpm: impr.adjustedCpm || impr.cpm,
+        p_country_code: impr.countryCode || null,
+        p_country_name: impr.countryName || null,
+        p_country_tier: impr.countryTier || null,
+        p_placement_type: 'shorts',
       });
     } catch { /* swallow — never break playback on accounting failure */ }
   }, [opts.videoId]);

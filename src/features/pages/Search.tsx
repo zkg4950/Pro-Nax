@@ -26,7 +26,7 @@ interface SearchResult {
   type: 'video' | 'channel';
 }
 
-export default function Search() {
+function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -180,7 +180,7 @@ export default function Search() {
             <span className="text-sm font-medium">Filters:</span>
           </div>
 
-          <Select value={filterType} onValueChange={setFilterType}>
+          <Select value={filterType} onValueChange={(v) => setFilterType(v as 'all' | 'videos' | 'channels')}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
@@ -334,3 +334,4 @@ function formatNumber(num: number): string {
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
   return num.toString();
 }
+export default SearchPage;

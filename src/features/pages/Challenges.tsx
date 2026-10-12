@@ -62,7 +62,7 @@ export default function Challenges() {
 
       // Load user participations
       if (currentUser) {
-        const { data: userParts } = await supabase
+        const { data: userParts } = await (supabase as any)
           .from('challenge_participations')
           .select('*')
           .eq('user_id', currentUser.id);
@@ -82,12 +82,12 @@ export default function Challenges() {
 
   const joinChallenge = async (challengeId: string) => {
     if (!currentUser) {
-      toast({ title: 'Please login to join challenges', variant: 'destructive' });
+      toast.error('Please login to join challenges');
       return;
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('challenge_participations')
         .insert({
           challenge_id: challengeId,
@@ -97,11 +97,11 @@ export default function Challenges() {
 
       if (error) throw error;
 
-      toast({ title: 'Successfully joined the challenge!' });
+      toast.success('Successfully joined the challenge!');
       loadChallenges();
     } catch (error) {
       console.error('Failed to join challenge:', error);
-      toast({ title: 'Failed to join challenge', variant: 'destructive' });
+      toast.error('Failed to join challenge');
     }
   };
 

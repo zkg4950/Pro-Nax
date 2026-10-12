@@ -1,6 +1,6 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
 import React from "react";
-import { Upload, FolderOpen, Play, Pause, Volume2, Star, Trash2 } from "lucide-react";
+import { Upload, FolderOpen, Play, Pause, Volume2, Star, Trash2, Plus } from "lucide-react";
 import { MediaAsset } from "./types";
 
 interface MediaLibraryProps {

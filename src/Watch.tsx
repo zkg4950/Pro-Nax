@@ -60,6 +60,7 @@ type DbVideoRow = {
   views_count: number | null;
   duration_seconds: number | null;
   is_short: boolean | null;
+  category: string | null;
 };
 
 
@@ -106,7 +107,7 @@ export default function Watch() {
     (async () => {
       const { data: vrow } = await supabase
         .from('videos')
-        .select('id,title,description,video_url,thumb_url,owner_id,created_at,views_count,duration_seconds,is_short')
+        .select('id,title,description,video_url,thumb_url,owner_id,created_at,views_count,duration_seconds,is_short,category')
         .eq('id', videoId as any)
         .maybeSingle();
       if (cancelled || !vrow) return;
@@ -346,16 +347,28 @@ export default function Watch() {
     }
 
     // Fallback path: legacy ad SDK impression → record_ad_view (60/40 network flow)
-    const impression = await requestAdImpression({ videoId });
+    const impression = await requestAdImpression({
+      videoId,
+      placementType: 'long_form',
+      isShort: false,
+      category: dbVideo?.category || undefined,
+    });
     if (!impression.filled) {
       toast({ title: 'Ad slot unfilled', description: 'No live ad served this round.' });
       return;
     }
-    const { data, error } = await supabase.rpc('record_ad_view', {
+    const { data, error } = await supabase.rpc('record_ad_view_by_placement', {
       p_video_id: videoId,
       p_ad_revenue: impression.revenue,
       p_ad_network: impression.network,
-      p_cpm: impression.cpm,
+      p_cpm: impression.adjustedCpm || impression.cpm,
+      p_country_code: impression.countryCode || null,
+      p_country_name: impression.countryName || null,
+      p_country_tier: impression.countryTier || null,
+      p_placement_type: 'long_form',
+      p_category: impression.category || null,
+      p_category_multiplier: impression.categoryMultiplier || null,
+      p_category_tier: impression.categoryTier || null,
     });
     if (error) {
       toast({ title: 'Reward failed', description: error.message, variant: 'destructive' });
@@ -365,7 +378,7 @@ export default function Watch() {
     if (result?.paid) {
       toast({
         title: `+$${(result.creator_share ?? 0).toFixed(6)} credited 💰`,
-        description: `Live ${impression.network.replace('_', ' ')} ad · CPM $${impression.cpm.toFixed(2)}.`,
+        description: `Live ${impression.network.replace('_', ' ')} ad · CPM $${impression.cpm.toFixed(2)}${impression.countryName ? ` · ${impression.countryName}` : ''}.`,
       });
     } else if (result?.reason === 'daily_cap_reached') {
       toast({ title: 'Daily view cap reached', description: 'Max 3 paid views per video per 24h.' });

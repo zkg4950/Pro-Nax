@@ -10,6 +10,8 @@ import {
 import { supabase as _supabase } from '@/integrations/supabase/loose';
 import { invalidateAdSlot, type AdSlotRow } from '@/hooks/useAdSlot';
 import { fetchMultiNetworkLiveRates, type NetworkRateReview } from '@/lib/adSdk';
+import { AD_SLOT_HELP, AD_SLOT_REGISTRY, blankSlotRow } from '@/lib/adSlots';
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const supabase: any = _supabase;
@@ -33,15 +35,13 @@ const ALL_NETWORKS = [
 ];
 
 const SLOT_HELP: Record<string, string> = {
-  feed_grid_row: 'Banner or native ad injected between every N video cards on the home feed.',
-  sidebar: 'Sticky display ad on desktop watch pages and creator channel pages.',
-  watch_below_player: 'High-CTR banner shown directly under the main video player on the watch page.',
-  shorts_between: 'Full-screen vertical interstitial ad shown every N video swipes in ProNax Shorts.',
-  player_preroll: 'Video ad (VAST/VPAID) played before video start. Supports skippable (5s) & non-skippable.',
-  player_midroll: 'Video ad (VAST/VPAID) played during video playback at scheduled cue points.',
-  player_postroll: 'Video ad (VAST/VPAID) played immediately after video playback ends.',
-  floating_anchor: 'Sticky bottom floating bar ad displayed persistently across mobile and desktop.',
+  ...AD_SLOT_HELP,
+  home_banner: 'Legacy home banner placement.',
+  sidebar: 'Legacy sidebar placement.',
+  watch_preroll: 'Legacy pre-roll placement (superseded by player_preroll).',
+  shorts_interstitial: 'Legacy Shorts interstitial (superseded by shorts_between).',
 };
+
 
 /** No demo creatives: the console only ever renders real rows from `ad_settings`. */
 const DEFAULT_SLOTS: AdSlotRow[] = [];
@@ -99,21 +99,41 @@ export function AdSettingsTab() {
     });
   };
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const fetchRows = async () => {
     const { data, error } = await supabase
       .from('ad_settings')
       .select('*')
       .order('kind', { ascending: true })
       .order('slot', { ascending: true });
+    if (error || !data) return null;
+    return data as AdSlotRow[];
+  };
 
-    if (error || !data) {
-      setRows(DEFAULT_SLOTS);
-    } else {
-      setRows(data as AdSlotRow[]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    let data = await fetchRows();
+
+    // Seed any canonical placement that the app renders but the database
+    // does not have a row for yet, so every real slot is configurable here.
+    if (data) {
+      const existing = new Set(data.map((r) => r.slot));
+      const missing = AD_SLOT_REGISTRY.filter((d) => !existing.has(d.slot));
+      if (missing.length) {
+        const { error: seedError } = await supabase
+          .from('ad_settings')
+          .insert(missing.map(blankSlotRow));
+        if (!seedError) {
+          data = (await fetchRows()) ?? data;
+        } else {
+          toast.info(`${missing.length} ad placement(s) are not provisioned in the database yet.`);
+        }
+      }
     }
+
+    setRows(data ?? DEFAULT_SLOTS);
     setLoading(false);
   }, []);
+
 
   useEffect(() => { load(); }, [load]);
 

@@ -76,7 +76,7 @@ export function getTrafficSource(): string {
     if (hostname.includes('facebook') || hostname.includes('fb.')) return 'Facebook';
     if (hostname.includes('twitter') || hostname.includes('x.com')) return 'Twitter/X';
     if (hostname.includes('linkedin')) return 'LinkedIn';
-    if (hostname.includes('youtube')) return 'pronax';
+    
     if (hostname.includes('reddit')) return 'Reddit';
     if (hostname.includes('pinterest')) return 'Pinterest';
     

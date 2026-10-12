@@ -62,7 +62,7 @@ export function NotificationsBell() {
     if (actorIds.length === 0) return;
     const missing = actorIds.filter((id) => !actors[id]);
     if (!missing.length) return;
-    supabase.from('profiles').select('id,display_name').in('id', missing).then(({ data }) => {
+    supabase.from('profiles').select('id,display_name,avatar_url').in('id', missing).then(({ data }) => {
       if (!data) return;
       setActors((prev) => { const next = { ...prev }; for (const p of data as ActorProfile[]) next[p.id] = p; return next; });
     });
@@ -155,7 +155,13 @@ export function NotificationsBell() {
               </div>
             );
 
-            const href = videoId ? `/watch/${videoId}` : actorId && n.type === 'follow' ? `/channel/${name}` : null;
+            const href = typeof n.action_url === 'string' && n.action_url.startsWith('/')
+              ? n.action_url
+              : videoId
+                ? `/watch/${videoId}`
+                : actorId
+                  ? `/profile/${actorId}`
+                  : null;
             return href ? (
               <Link key={n.id} to={href} onClick={() => setOpen(false)} className="block">{inner}</Link>
             ) : (

@@ -30,10 +30,10 @@ export default function StudioContent() {
   }, [videos, search, visibilityFilter]);
 
   const handleVisibilityChange = async (videoId: string, visibility: string) => {
-    const { error } = await supabase
-      .from('videos')
-      .update({ visibility })
-      .eq('id', videoId);
+    const { error } = await supabase.rpc('creator_update_video_visibility', {
+      p_video_id: videoId,
+      p_visibility: visibility,
+    });
     if (error) {
       toast.error(error.message);
       return;

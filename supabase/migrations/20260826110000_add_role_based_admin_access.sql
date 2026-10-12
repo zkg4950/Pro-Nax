@@ -6,7 +6,7 @@
 -- ============================================================
 -- ROLE PERMISSIONS MATRIX
 -- ============================================================
--- 
+--
 -- Admin: Full access to all operations
 -- Moderator: Reports, moderation, appeals, strikes, users (ban/unban), videos, copyright
 -- Support: Read-only access to reports, moderation, appeals, videos, copyright
@@ -23,34 +23,20 @@
 -- UPDATE EXISTING ADMIN RPCs WITH ROLE CHECKS
 -- ============================================================
 
--- Note: This migration assumes the admin RPCs already exist.
--- If they don't exist, they will be created by the admin management migration.
-
--- For now, we'll add role checks by updating the existing functions.
--- This is a placeholder for the actual function updates that would be done
--- after reviewing the existing admin RPC implementations.
+-- Note: The actual RPC functions are created in other migrations.
+-- This migration adds additional role checks to functions that need them.
 
 -- ============================================================
 -- ENSURE ROLE CHECKS IN RPC FUNCTIONS
 -- ============================================================
 
--- The following function updates should be applied to existing admin RPCs:
--- These are examples of the role checks that should be added:
-
--- Example role check pattern for admin_set_role (ADMIN ONLY):
--- IF NOT has_role(auth.uid(), 'admin') THEN
---     RAISE EXCEPTION 'Admin role required for role management';
--- END IF;
-
--- Example role check pattern for admin_ban_user (ADMIN OR MODERATOR):
--- IF NOT (has_role(auth.uid(), 'admin') OR has_role(auth.uid(), 'moderator')) THEN
---     RAISE EXCEPTION 'Admin or moderator role required for user bans';
--- END IF;
-
--- Example role check pattern for admin_adjust_wallet (ADMIN ONLY):
--- IF NOT has_role(auth.uid(), 'admin') THEN
---     RAISE EXCEPTION 'Admin role required for wallet operations';
--- END IF;
+-- The following functions already have proper role checks from the moderator/support migration:
+-- - admin_ban_user (admin or moderator)
+-- - admin_unban_user (admin or moderator)
+-- - admin_adjust_wallet (admin only)
+-- - admin_mark_withdrawal_processed (admin only)
+-- - admin_set_role (admin only)
+-- - admin_set_ip_rule (admin only)
 
 -- ============================================================
 -- GRANT EXECUTE PERMISSIONS ON has_role FUNCTION
@@ -60,9 +46,15 @@
 GRANT EXECUTE ON FUNCTION has_role TO authenticated;
 
 -- ============================================================
+-- ADD SUPPORT ROLE READ-ONLY POLICIES
+-- ============================================================
+
+-- Support role can read certain tables but cannot write
+-- This is handled at the RLS policy level in other migrations
+
+-- ============================================================
 -- COMMENTS
 -- ============================================================
 
--- This migration sets up the role-based access control framework.
--- The actual function implementations should be updated separately
--- to include the role checks shown in the examples above.
+-- This migration ensures the role-based access control framework is properly set up.
+-- The actual role checks are implemented in the individual RPC function migrations.

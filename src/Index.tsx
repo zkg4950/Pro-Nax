@@ -97,7 +97,7 @@ export default function Index() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [cat, setCat] = useState('All');
   const [hasMore, setHasMore] = useState(true);
-  // Rotating on every mount gives YouTube-style "different picks each visit".
+  // Rotating on every mount gives ProNax-style "different picks each visit".
   const [seed] = useState(() => rotateFeedSeed());
   const PAGE = 24;
 

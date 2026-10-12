@@ -6,7 +6,7 @@ import {
   Loader2, Clock, ChevronRight, ChevronLeft, Check,
   AlertTriangle, ShieldCheck, FileText, Settings,
   Globe, Link as LinkIcon, Lock, DollarSign, Sparkles, Plus,
-  Tag, AlertCircle, RefreshCw, Layers, Radio
+  Tag, AlertCircle, RefreshCw, Layers, Radio, Wifi, WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,10 +126,14 @@ export function UploadModal({
 
   // Step 2 Checks & Monetization state
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState<string>('');
   const [processingStage, setProcessingStage] = useState<'uploading' | 'processing_hd' | 'copyright_check' | 'complete'>('uploading');
   const [copyrightStatus, setCopyrightStatus] = useState<'scanning' | 'clean' | 'claimed' | 'duplicate'>('scanning');
   const [claimDetails, setClaimDetails] = useState<{ claimant: string; track: string; policy: string; claimId?: string } | null>(null);
   const [generatedFingerprint, setGeneratedFingerprint] = useState<string>('');
+  const [uploadError, setUploadError] = useState<{ type: string; message: string; retryable: boolean } | null>(null);
+  const [uploadStartTime, setUploadStartTime] = useState<number | null>(null);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number | null>(null);
 
   // Monetization & Ad Suitability
   const [monetizationEnabled, setMonetizationEnabled] = useState(true);
@@ -148,6 +152,8 @@ export function UploadModal({
   const [autoSaving, setAutoSaving] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [networkRecoveryAttempt, setNetworkRecoveryAttempt] = useState(0);
 
   // Sync initial file
   useEffect(() => {
@@ -301,9 +307,50 @@ export function UploadModal({
   const handleSelectVideoFile = (selectedFile: File) => {
     const check = validateFile(selectedFile, 'video');
     if (!check.ok) {
-      toast({ title: check.error, variant: 'destructive' });
+      // Provide more detailed error messages based on the specific validation failure
+      let errorMessage = check.error;
+      let errorDetails = '';
+
+      if (check.error.includes('too large')) {
+        const fileSizeMB = (selectedFile.size / (1024 * 1024)).toFixed(2);
+        errorDetails = `Your file is ${fileSizeMB}MB. Please compress your video or split it into smaller parts.`;
+      } else if (check.error.includes('Unsupported')) {
+        errorDetails = 'Supported formats: MP4, WebM, QuickTime, MKV. Please convert your video to a supported format.';
+      } else if (check.error.includes('empty')) {
+        errorDetails = 'The selected file appears to be corrupted or empty. Please select a different file.';
+      }
+
+      toast({ 
+        title: errorMessage, 
+        description: errorDetails,
+        variant: 'destructive' 
+      });
       return;
     }
+
+    // Additional validation checks
+    if (selectedFile.name.length > 255) {
+      toast({ 
+        title: 'File name too long', 
+        description: 'Please rename your file to be under 255 characters.',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    // Check for valid file extension
+    const validExtensions = ['.mp4', '.webm', '.mov', '.mkv', '.avi'];
+    const lastDotIndex = selectedFile.name.lastIndexOf('.');
+    const fileExtension = lastDotIndex !== -1 ? selectedFile.name.toLowerCase().substring(lastDotIndex) : '';
+    if (!fileExtension || !validExtensions.includes(fileExtension)) {
+      toast({ 
+        title: 'Invalid file extension', 
+        description: `The file extension "${fileExtension || 'none'}" is not supported. Please use: ${validExtensions.join(', ')}`,
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     setFile(selectedFile);
     if (onVideoChange) onVideoChange(selectedFile);
 
@@ -340,7 +387,24 @@ export function UploadModal({
       const imgFile = e.target.files[0];
       const imgCheck = validateFile(imgFile, 'image');
       if (!imgCheck.ok) {
-        toast({ title: imgCheck.error, variant: 'destructive' });
+        // Provide detailed error messages for image validation
+        let errorMessage = imgCheck.error;
+        let errorDetails = '';
+
+        if (imgCheck.error.includes('too large')) {
+          const fileSizeMB = (imgFile.size / (1024 * 1024)).toFixed(2);
+          errorDetails = `Your image is ${fileSizeMB}MB. Maximum size is 8MB. Please compress your image.`;
+        } else if (imgCheck.error.includes('Unsupported')) {
+          errorDetails = 'Supported formats: JPEG, PNG, WebP, AVIF. Please convert your image to a supported format.';
+        } else if (imgCheck.error.includes('empty')) {
+          errorDetails = 'The selected image appears to be corrupted or empty. Please select a different file.';
+        }
+
+        toast({ 
+          title: errorMessage, 
+          description: errorDetails,
+          variant: 'destructive' 
+        });
         return;
       }
       const imgUrl = URL.createObjectURL(imgFile);
@@ -362,6 +426,39 @@ export function UploadModal({
     }, 2500);
     return () => clearTimeout(timer);
   }, [title, description, category, selectedPlaylist, open, file]);
+
+  // Network status monitoring
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setNetworkRecoveryAttempt(prev => prev + 1);
+      toast({ 
+        title: 'Network connection restored', 
+        description: 'You can continue uploading.',
+        variant: 'default' 
+      });
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast({ 
+        title: 'Network connection lost', 
+        description: 'Please check your internet connection. Upload will pause.',
+        variant: 'destructive' 
+      });
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check
+    setIsOnline(navigator.onLine);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Run Content ID & Processing Simulation on Step 2
   useEffect(() => {
@@ -561,6 +658,16 @@ export function UploadModal({
   };
 
   const handlePublish = async () => {
+    // Check network status before attempting upload
+    if (!isOnline) {
+      toast({ 
+        title: 'No network connection', 
+        description: 'Please check your internet connection and try again.',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     // Validate metadata and account state before anything is written.
     const parsedMeta = videoMetadataSchema.safeParse({
       title,
@@ -594,6 +701,8 @@ export function UploadModal({
     }
 
     setPublishing(true);
+    setUploadError(null);
+    setUploadStartTime(Date.now());
     try {
       // Step 1: Validate file size before processing
       const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit
@@ -649,14 +758,31 @@ export function UploadModal({
         duration: duration ? Math.round(duration) : 180,
         thumbnailUrl: chosenThumb,
         ownerId: user.id,
-        onProgress: (progress) => {
-          console.log('Upload progress:', progress);
-        }
+        onProgress: (progress, stage) => {
+          setUploadProgress(progress);
+          if (stage) setUploadStage(stage);
+          
+          // Calculate ETA for large files
+          if (progress > 0 && uploadStartTime) {
+            const elapsed = Date.now() - uploadStartTime;
+            const remaining = (elapsed / progress) * (100 - progress);
+            setEstimatedTimeRemaining(remaining);
+          }
+        },
+        onError: (errorType, message) => {
+          setUploadError({ type: errorType, message, retryable: errorType === 'network_error' || errorType === 'server_error' });
+        },
+        maxRetries: 3
       });
 
       console.log('Upload result:', uploadResult);
 
       if (!uploadResult.success) {
+        setUploadError({
+          type: uploadResult.errorType || 'unknown_error',
+          message: uploadResult.message || 'An error occurred during upload',
+          retryable: uploadResult.retryable || false
+        });
         toast({ 
           title: 'Upload failed', 
           description: uploadResult.message || 'An error occurred during upload',
@@ -668,8 +794,8 @@ export function UploadModal({
 
       // Step 6: Handle copyright detection result
       if (uploadResult.status === 'copyright_flagged') {
-        const isDuplicate = uploadResult.copyrightMatch?.duplicateDetected;
-        const claimId = uploadResult.copyrightMatch?.claimId;
+        const isDuplicate = uploadResult.duplicateDetected;
+        const claimId = (uploadResult as unknown as { claimId?: string }).claimId;
         
         toast({
           title: isDuplicate ? 'Duplicate / Copyright Claim Detected!' : 'Copyright content detected!',
@@ -781,6 +907,20 @@ export function UploadModal({
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            {/* Network Status Indicator */}
+            <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
+              {isOnline ? (
+                <div className="flex items-center gap-1.5 text-emerald-400">
+                  <Wifi className="w-3.5 h-3.5" />
+                  <span>Online</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-red-400">
+                  <WifiOff className="w-3.5 h-3.5" />
+                  <span>Offline</span>
+                </div>
+              )}
+            </div>
             <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400 font-mono">
               {autoSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />}
               {draftSaved && <Check className="w-3.5 h-3.5 text-emerald-400" />}
@@ -904,6 +1044,11 @@ export function UploadModal({
                         </div>
                         <p className="text-sm font-bold text-white">Drag and drop video files to upload</p>
                         <p className="text-xs text-zinc-400 mt-1">Your content is protected until you choose to publish.</p>
+                        <div className="mt-3 text-[10px] text-zinc-500 space-y-1">
+                          <p>• MP4, WebM, MOV, MKV up to 2GB</p>
+                          <p>• Recommended: 1080p, 30fps</p>
+                          <p>• Network connection required</p>
+                        </div>
                         <Button size="sm" className="mt-4 bg-gradient-to-r from-red-600 to-cyan-600 hover:from-red-500 hover:to-cyan-500 text-white font-bold px-5 py-2.5 rounded-xl shadow-lg shadow-cyan-950/40 border border-cyan-300/30 min-h-[44px]">
                           SELECT FILES
                         </Button>
@@ -912,7 +1057,7 @@ export function UploadModal({
                           id="video-file-input"
                           ref={fileInputRef} 
                           onChange={handleFileInputChange} 
-                          accept="video/*" 
+                          accept=".mp4,.webm,.mov,.mkv,.avi,video/*" 
                           className="hidden" 
                         />
                       </div>
@@ -927,13 +1072,16 @@ export function UploadModal({
                             <div className="flex items-center gap-2 text-[10px] text-cyan-300/80 font-mono mt-0.5">
                               <span>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
                               {duration && <span>• {formatDuration(duration)}</span>}
+                              {file.size > 500 * 1024 * 1024 && (
+                                <span className="text-amber-400">• Large file</span>
+                              )}
                             </div>
                           </div>
                         </div>
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          onClick={() => { setFile(null); setVideoPreviewUrl(null); }}
+                          onClick={() => { setFile(null); setVideoPreviewUrl(null); setUploadError(null); }}
                           className="text-xs text-cyan-300 hover:text-white hover:bg-cyan-950/40 border border-cyan-500/20 min-h-[38px] cursor-pointer shrink-0"
                         >
                           Change File
@@ -1202,7 +1350,7 @@ export function UploadModal({
                         Processing & Scan Pipeline
                       </span>
                       <span className="text-cyan-400 font-mono">
-                        {processingStage === 'uploading' ? `Uploading (${uploadProgress}%)` : processingStage === 'processing_hd' ? 'Processing 1080p HD...' : processingStage === 'copyright_check' ? 'Scanning Content ID...' : 'Complete'}
+                        {uploadStage || (processingStage === 'uploading' ? `Uploading (${uploadProgress}%)` : processingStage === 'processing_hd' ? 'Processing 1080p HD...' : processingStage === 'copyright_check' ? 'Scanning Content ID...' : 'Complete')}
                       </span>
                     </div>
 
@@ -1213,7 +1361,14 @@ export function UploadModal({
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                         Destination: Cloudflare R2 Vault (cdn.pronax.tv)
                       </span>
-                      <span>Chunked Resumable Upload Active</span>
+                      <span className="flex items-center gap-2">
+                        <span>Chunked Resumable Upload Active</span>
+                        {estimatedTimeRemaining && uploadProgress > 0 && uploadProgress < 100 && (
+                          <span className="text-zinc-400">
+                            ~{Math.round(estimatedTimeRemaining / 1000)}s remaining
+                          </span>
+                        )}
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 text-[11px] pt-1">
@@ -1229,14 +1384,36 @@ export function UploadModal({
                     </div>
                   </div>
 
+                  {/* Upload Error Banner */}
+                  {uploadError && (
+                    <div className="p-4 rounded-2xl border border-red-500/50 bg-red-950/40 text-red-200 flex items-start gap-3.5 transition shadow-xl">
+                      <AlertTriangle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+                      <div className="space-y-2 flex-1">
+                        <h3 className="text-sm font-bold">Upload Failed</h3>
+                        <p className="text-xs leading-relaxed text-red-100">{uploadError.message}</p>
+                        {uploadError.retryable && (
+                          <button
+                            type="button"
+                            onClick={handlePublish}
+                            className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold transition-colors"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Retry Upload
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Copyright Scan Banner */}
-                  <div className={`p-4 rounded-2xl border flex items-start gap-3.5 transition shadow-xl ${
-                    copyrightStatus === 'clean'
-                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
-                      : copyrightStatus === 'claimed' || copyrightStatus === 'duplicate'
-                      ? 'bg-red-950/40 border-red-500/50 text-red-200'
-                      : 'bg-[#0f121d] border-cyan-500/30 text-zinc-300'
-                  }`}>
+                  {!uploadError && (
+                    <div className={`p-4 rounded-2xl border flex items-start gap-3.5 transition shadow-xl ${
+                      copyrightStatus === 'clean'
+                        ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                        : copyrightStatus === 'claimed' || copyrightStatus === 'duplicate'
+                        ? 'bg-red-950/40 border-red-500/50 text-red-200'
+                        : 'bg-[#0f121d] border-cyan-500/30 text-zinc-300'
+                    }`}>
                     {copyrightStatus === 'clean' ? (
                       <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
                     ) : copyrightStatus === 'claimed' || copyrightStatus === 'duplicate' ? (
@@ -1277,6 +1454,7 @@ export function UploadModal({
                       )}
                     </div>
                   </div>
+                  )}
 
                   {/* Monetization & Self-Certification Section */}
                   <div className="bg-[#0f121d]/90 border border-cyan-500/30 p-4 sm:p-5 rounded-2xl space-y-4 shadow-lg">

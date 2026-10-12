@@ -77,6 +77,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppConfigProvider } from "@/hooks/useAppConfig";
 import { WalletProvider } from "@/contexts/WalletContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { MainLayout } from "@/components/MainLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { CookieConsent } from "@/components/security/CookieConsent";
@@ -226,22 +227,24 @@ function RootComponent() {
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <AppConfigProvider>
-          <WalletProvider>
-            <ClientOnly fallback={<div className="min-h-screen bg-background" />}>
-              <ErrorBoundary>
-                {isStudioRoute ? (
-                  // Studio routes render directly without MainLayout
-                  <Outlet />
-                ) : (
-                  // Main app routes render with MainLayout
-                  <MainLayout />
-                )}
-              </ErrorBoundary>
-              {!isStudioRoute && <CookieConsent />}
-            </ClientOnly>
-          </WalletProvider>
-        </AppConfigProvider>
+        <AuthProvider>
+          <AppConfigProvider>
+            <WalletProvider>
+              <ClientOnly fallback={<div className="min-h-screen bg-background" />}>
+                <ErrorBoundary>
+                  {isStudioRoute ? (
+                    // Studio routes render directly without MainLayout
+                    <Outlet />
+                  ) : (
+                    // Main app routes render with MainLayout
+                    <MainLayout />
+                  )}
+                </ErrorBoundary>
+                {!isStudioRoute && <CookieConsent />}
+              </ClientOnly>
+            </WalletProvider>
+          </AppConfigProvider>
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

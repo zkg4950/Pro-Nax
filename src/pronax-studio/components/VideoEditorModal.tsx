@@ -58,6 +58,7 @@ import {
   Track,
   EditorDoc,
 } from "./editor/types";
+import { validateEditorVideo } from "../utils/videoTypeConversion";
 import {
   TRACK_COLORS,
   DEFAULT_FILTERS,
@@ -116,6 +117,17 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
   onClose,
   onSaveVideo,
 }) => {
+  // Validate video data on mount and when video changes
+  useEffect(() => {
+    if (videoProp) {
+      const validation = validateEditorVideo(videoProp);
+      if (!validation.valid) {
+        console.error('Invalid video data in editor:', validation.errors);
+        // Could show error UI here, but for now we'll log and continue
+      }
+    }
+  }, [videoProp]);
+
   const totalHint = Math.max(30, parseDurationSec(videoProp?.duration));
 
   /* ---------------- document + history ---------------- */
@@ -278,6 +290,24 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoDuration, setVideoDuration] = useState(0);
 
+  const duration = useMemo(() => {
+    // Calculate total timeline duration based on all clips
+    const maxClipEnd = doc.clips.length > 0 
+      ? Math.max(...doc.clips.map((c) => c.start + c.duration))
+      : 0;
+    
+    // Consider video duration if available
+    const videoDur = videoDuration || 0;
+    
+    // Use the hint for base duration but ensure it covers all content
+    const baseDuration = Math.max(totalHint, 30);
+    
+    // Return the maximum of all durations
+    return Math.max(baseDuration, maxClipEnd, videoDur);
+  }, [doc.clips, totalHint, videoDuration]);
+
+  const pxPerSec = (zoom / 100) * 24;
+
   // Use extracted timeline interaction hook
   const {
     dragRef,
@@ -287,7 +317,8 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
     patchClip,
     razorAt,
     deleteSelected,
-  } = useTimelineInteraction(doc, duration, pxPerSec, snapping, playhead, timelineRef, commit, live, setSelectedClipId);
+  } = useTimelineInteraction(doc, duration, pxPerSec, snapping, playhead, timelineRef as React.RefObject<HTMLDivElement>, commit, live, setSelectedClipId);
+
 
   // Initialize Web Audio API for real audio mixing
   useEffect(() => {
@@ -353,23 +384,6 @@ export const VideoEditorModal: React.FC<VideoEditorModalProps> = ({
       : [];
   const hasClaim = restrictionList.some((r) => r.toLowerCase().includes("copyright"));
 
-  const duration = useMemo(() => {
-    // Calculate total timeline duration based on all clips
-    const maxClipEnd = doc.clips.length > 0 
-      ? Math.max(...doc.clips.map((c) => c.start + c.duration))
-      : 0;
-    
-    // Consider video duration if available
-    const videoDur = videoDuration || 0;
-    
-    // Use the hint for base duration but ensure it covers all content
-    const baseDuration = Math.max(totalHint, 30);
-    
-    // Return the maximum of all durations
-    return Math.max(baseDuration, maxClipEnd, videoDur);
-  }, [doc.clips, totalHint, videoDuration]);
-
-  const pxPerSec = (zoom / 100) * 24;
   const selected = doc.clips.find((c) => c.id === selectedClipId) ?? null;
   const selectedTrack = doc.tracks.find((t) => t.id === selected?.trackId) ?? null;
 

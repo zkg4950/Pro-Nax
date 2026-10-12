@@ -2,7 +2,7 @@
 /**
  * ProNax Home Feed Service
  * -------------------------------------------------------------
- * YouTube-style personalized home feed loader.
+ * ProNax-style personalized home feed loader.
  *  1. Server-side ranking through the get_home_feed_v2 RPC (with graceful
  *     fallback to direct table reads when the RPC is unavailable).
  *  2. Watch-history exclusion so "For You" never repeats watched videos.
@@ -134,7 +134,7 @@ function seededNoise(id: string, seed: number): number {
 
 /**
  * Re-rank long-form videos with the ProNax trending engine, then apply a
- * small seeded jitter so each refresh shows a fresh order (YouTube-style)
+ * small seeded jitter so each refresh shows a fresh order (ProNax-style)
  * without destroying relevance.
  */
 export function rankHomeFeed(videos: HomeFeedVideo[], kind: FeedKind, seed: number): HomeFeedVideo[] {
@@ -217,9 +217,26 @@ export async function loadHomeFeedPage(opts: {
     }
   }
 
+  // 3. EMERGENCY FALLBACK: Try without status filter if no results
+  if (!rows.length) {
+    try {
+      console.log('[homeFeed] Emergency fallback: trying without status filter');
+      let q = supabase.from('videos').select(SELECT_COLS).eq('visibility', 'public');
+      if (catParam) q = q.ilike('category', `%${catParam}%`);
+      q =
+        kind === 'trending'
+          ? q.order('views_count', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
+          : q.order('created_at', { ascending: false });
+      const { data, error } = await q.range(offset, offset + fetchCount - 1);
+      if (!error && Array.isArray(data)) rows = data as unknown as HomeFeedVideo[];
+    } catch {
+      /* keep empty */
+    }
+  }
+
   if (!rows.length) return [];
 
-  // 3. Personalization filters
+  // 4. Personalization filters
   const seenThisSession = getSessionSeenIds();
   let pool = rows;
   if (excludeWatched && watchedSet.size) {
@@ -231,7 +248,7 @@ export async function loadHomeFeedPage(opts: {
     if (unseen.length >= Math.min(6, pool.length)) pool = unseen;
   }
 
-  // 4. Algorithmic ranking + per-refresh variation
+  // 5. Algorithmic ranking + per-refresh variation
   const ranked = rankHomeFeed(pool, kind, seed).slice(0, limit);
   markSessionSeen(ranked.map((v) => String(v.id)));
   return ranked;

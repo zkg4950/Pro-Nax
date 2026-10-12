@@ -3,7 +3,7 @@ import * as Icons from 'lucide-react';
 import {
   Home, Compass, PlaySquare, Wallet, Upload, TrendingUp,
   Settings, User, Shield, Radio, SlidersHorizontal,
-  Users, History as HistoryIcon, Bookmark, Heart, ListVideo,
+  Users, History as HistoryIcon, Bookmark, Heart, ListVideo, MessageCircle,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useSidebarMenu } from '@/hooks/useSidebarMenu';
 import { useAppConfig } from '@/hooks/useAppConfig';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 type NavItem = { title: string; url: string; icon: React.ComponentType<{ className?: string }> };
 
@@ -28,6 +29,7 @@ const mainItems: NavItem[] = [
   { title: 'Shorts', url: '/shorts', icon: PlaySquare },
   { title: 'Trending', url: '/trending', icon: TrendingUp },
   { title: 'Subscriptions', url: '/subscriptions', icon: Users },
+  { title: 'Inbox', url: '/inbox', icon: MessageCircle },
 ];
 
 const libraryItems: NavItem[] = [
@@ -92,11 +94,17 @@ function NavGroup({ label, items }: { label: string; items: NavItem[] }) {
   );
 }
 
+const adminItems: NavItem[] = [
+  { title: 'Admin Console', url: '/admin', icon: Shield },
+];
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const { isEnabled, system } = useAppConfig();
   const { items: dbItems } = useSidebarMenu('sidebar');
+  const { isStaff } = useAdminRole();
+
 
   // Feature-flag filter
   const filtered = (items: NavItem[], flagMap: Record<string, string>) =>
@@ -134,7 +142,9 @@ export function AppSidebar() {
         <NavGroup label="Library" items={libraryItems} />
         <NavGroup label="Creator" items={creator} />
         <NavGroup label="Account" items={accountItems} />
+        {isStaff && <NavGroup label="Admin" items={adminItems} />}
         {dbMapped.length > 0 && <NavGroup label="More" items={dbMapped} />}
+
       </SidebarContent>
     </Sidebar>
   );

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/loose";
+import { useAuthSession } from "@/hooks/useAuthSession";
 import { recordAudit, AuditActions } from "@/lib/audit";
 import { checkPasswordStrength, emailSchema, firstIssue } from "@/lib/validation";
 import { PasswordStrengthMeter } from "@/components/security/PasswordStrengthMeter";
@@ -53,6 +54,7 @@ function Card({
 }
 
 export default function SecurityPrivacy() {
+  const { signOut } = useAuthSession();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
@@ -132,9 +134,11 @@ export default function SecurityPrivacy() {
       severity: "warning",
       entityType: "user",
     });
-    const { error } = await supabase.auth.signOut({ scope: "global" });
+    const result = await signOut();
     setBusy(null);
-    if (error) return toast.error(error.message);
+    if (!result.success) {
+      return toast.error(result.error || "Failed to sign out");
+    }
     toast.success("Signed out of all devices");
   };
 

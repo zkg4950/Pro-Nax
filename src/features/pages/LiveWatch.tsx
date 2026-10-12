@@ -1,5 +1,6 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
-import { useParams, useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { useParams } from '@/lib/router-compat';
 import { Link } from '@/lib/router-compat';
 import { motion } from 'framer-motion';
 import { 
@@ -134,15 +135,8 @@ export default function LiveWatch() {
       // Get stream data
       const { data: streamData, error: streamError } = await supabase
         .from('streams')
-        .select(`
-          *,
-          profiles!owner_id (
-            display_name,
-            avatar_url,
-            subscribers_count
-          )
-        `)
-        .eq('playback_id', playbackId)
+        .select('*')
+        .eq('mux_playback_id', playbackId ?? '')
         .maybeSingle();
 
       if (streamError) throw streamError;
@@ -152,14 +146,22 @@ export default function LiveWatch() {
         return;
       }
 
+      const { data: ownerProfile } = await supabase
+        .from('profiles')
+        .select('display_name, avatar_url, subscribers_count')
+        .eq('id', streamData.user_id)
+        .maybeSingle();
+
       const formattedStream: StreamData = {
         ...streamData,
+        playback_id: streamData.mux_playback_id || '',
+        owner_id: streamData.user_id,
         channel: {
-          display_name: streamData.profiles?.display_name || 'Unknown',
-          avatar_url: streamData.profiles?.avatar_url || '',
-          subscribers_count: streamData.profiles?.subscribers_count || 0,
+          display_name: ownerProfile?.display_name || 'Unknown',
+          avatar_url: ownerProfile?.avatar_url || '',
+          subscribers_count: ownerProfile?.subscribers_count || 0,
         },
-      };
+      } as StreamData;
 
       setStream(formattedStream);
       setIsLive(streamData.status === 'live');

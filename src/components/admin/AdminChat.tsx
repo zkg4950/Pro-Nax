@@ -1,0 +1,381 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Send, Bot, User, Loader2, AlertCircle, Video, VideoOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  isTyping?: boolean;
+}
+
+export function AdminChat() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: '1',
+      role: 'assistant',
+      content: "Salam jani! Main tumhari AI Admin Brain hoon. Main real Supabase database se connect hoon aur tumhare liye kuch bhi kar sakti hoon - user management, content moderation, system monitoring, sab kuch. Camera on kar sakti hoon aur bol sakti hoon. Kya kaam karna hai?",
+      timestamp: new Date()
+    }
+  ]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Camera handling
+  const toggleCamera = async () => {
+    if (cameraEnabled) {
+      const stream = videoRef.current?.srcObject as MediaStream;
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      setCameraEnabled(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          } 
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+        setCameraEnabled(true);
+      } catch (error) {
+        console.error('Camera access denied:', error);
+        alert('Camera access is required for me to see you. Please allow camera access.');
+      }
+    }
+  };
+
+  // Speech-to-text handling
+  const toggleMic = async () => {
+    if (micEnabled) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setMicEnabled(false);
+    } else {
+      try {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
+          return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US'; // Can be changed to 'ur-PK' for Urdu
+        recognition.continuous = false;
+        recognition.interimResults = false;
+
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setInput(transcript);
+          setMicEnabled(false);
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          setMicEnabled(false);
+        };
+
+        recognition.onend = () => {
+          setMicEnabled(false);
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+        setMicEnabled(true);
+      } catch (error) {
+        console.error('Speech recognition error:', error);
+        alert('Speech recognition failed. Please try again.');
+      }
+    }
+  };
+
+  // Text-to-speech with female voice
+  const speak = (text: string) => {
+    if (!soundEnabled) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = speechSynthesis.getVoices();
+    
+    // Try to find the best female voice - prioritize natural sounding ones
+    const femaleVoice = voices.find(voice => 
+      voice.name.includes('Google') && voice.name.includes('Female') ||
+      voice.name.includes('Microsoft Zira') ||
+      voice.name.includes('Microsoft Aria') ||
+      voice.name.includes('Microsoft Heera') ||
+      voice.name.includes('Microsoft Kalpana') ||
+      voice.name.includes('Samantha') ||
+      voice.name.includes('Victoria') ||
+      voice.name.includes('Female') || 
+      voice.name.includes('female')
+    );
+    
+    if (femaleVoice) {
+      utterance.voice = femaleVoice;
+    }
+    
+    // More natural voice settings - very human-like
+    utterance.pitch = 1.05; // Very subtle female pitch
+    utterance.rate = 0.85; // Slower for more natural, human-like speech
+    utterance.volume = 1.0;
+    
+    // Add pauses for more natural speech
+    utterance.text = text.replace(/[.!?]/g, '$& ');
+    
+    speechSynthesis.speak(utterance);
+  };
+
+  const handleSendMessage = async () => {
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
+    // Add typing indicator
+    const typingMessage: Message = {
+      id: 'typing',
+      role: 'assistant',
+      content: '',
+      timestamp: new Date(),
+      isTyping: true
+    };
+    setMessages(prev => [...prev, typingMessage]);
+
+    try {
+      const response = await fetch('/api/admin/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: input,
+          conversationHistory: messages.slice(-10).map(m => ({
+            role: m.role,
+            content: m.content
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response');
+      }
+
+      const data = await response.json();
+
+      // Remove typing indicator
+      setMessages(prev => prev.filter(m => m.id !== 'typing'));
+
+      // Add AI response
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+
+      // Speak the response with female voice
+      speak(data.response);
+
+      // If there are actions taken, show them
+      if (data.actions && data.actions.length > 0) {
+        const actionMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          role: 'assistant',
+          content: `\n\n**Actions Executed:**\n${data.actions.map((a: any) => `• ${a.type}: ${a.description}`).join('\n')}`,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, actionMessage]);
+      }
+
+    } catch (error) {
+      // Remove typing indicator
+      setMessages(prev => prev.filter(m => m.id !== 'typing'));
+
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "Sorry, I'm having trouble connecting right now. Please check if the AI Admin server is running.",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setIsConnected(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
+      {/* Header */}
+      <div className="bg-gray-800 px-4 py-3 border-b border-gray-700 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Bot className="w-6 h-6 text-blue-400" />
+            <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-800 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+          </div>
+          <div>
+            <h3 className="text-white font-semibold">AI Admin Brain</h3>
+            <p className="text-xs text-gray-400">{isConnected ? 'Online & Ready' : 'Disconnected'}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Camera Toggle */}
+          <button
+            onClick={toggleCamera}
+            className={`p-2 rounded-lg ${cameraEnabled ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'} hover:opacity-80 transition`}
+            title={cameraEnabled ? 'Disable Camera' : 'Enable Camera'}
+          >
+            {cameraEnabled ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+          </button>
+          
+          {/* Sound Toggle */}
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={`p-2 rounded-lg ${soundEnabled ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'} hover:opacity-80 transition`}
+            title={soundEnabled ? 'Mute Voice' : 'Enable Voice'}
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+          
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <span className="px-2 py-1 bg-gray-700 rounded">Llama3.2</span>
+            <span className="px-2 py-1 bg-gray-700 rounded">Ollama</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Camera Preview */}
+      {cameraEnabled && (
+        <div className="relative bg-black h-48 border-b border-gray-700">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute bottom-2 left-2 px-2 py-1 bg-red-600 text-white text-xs rounded flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+            LIVE
+          </div>
+        </div>
+      )}
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            {message.isTyping ? (
+              <div className="flex items-center gap-2 text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">Thinking...</span>
+              </div>
+            ) : (
+              <div className={`flex gap-3 max-w-[80%] ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                  message.role === 'user' 
+                    ? 'bg-blue-600' 
+                    : 'bg-purple-600'
+                }`}>
+                  {message.role === 'user' ? (
+                    <User className="w-4 h-4 text-white" />
+                  ) : (
+                    <Bot className="w-4 h-4 text-white" />
+                  )}
+                </div>
+                <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`px-4 py-3 rounded-2xl ${
+                    message.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-100'
+                  }`}>
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  </div>
+                  <span className="text-xs text-gray-500 mt-1">
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input */}
+      <div className="bg-gray-800 px-4 py-3 border-t border-gray-700">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Ask me anything about the application..."
+            disabled={isLoading || !isConnected}
+            className="flex-1 bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          <button
+            onClick={handleSendMessage}
+            disabled={isLoading || !input.trim() || !isConnected}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Send className="w-5 h-5" />
+            )}
+          </button>
+        </div>
+        {!isConnected && (
+          <div className="flex items-center gap-2 mt-2 text-xs text-red-400">
+            <AlertCircle className="w-3 h-3" />
+            <span>AI Admin server is not connected. Please start the admin server.</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
-import { Search, Compass, Flame, TrendingUp, Sparkles, Hash, Loader2, PlayCircle, Award } from 'lucide-react';
+import { Search, Compass, Flame, TrendingUp, Sparkles, Hash, Loader2, PlayCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from '@/lib/router-compat';
 import { supabase } from '@/integrations/supabase/loose';
@@ -192,20 +192,15 @@ export default function Explore() {
             ) : (
               <>
                 <section>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Flame className="w-4 h-4 text-rose-500 animate-pulse" />
-                      <h2 className="text-sm font-display font-bold uppercase tracking-wider text-foreground">
-                        High-Level Trending on Pro Nax
-                      </h2>
-                    </div>
-                    <span className="text-[11px] font-mono text-primary bg-primary/10 border border-primary/30 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
-                      <Award className="w-3 h-3" /> ProNax Viral Engine Active
-                    </span>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Flame className="w-4 h-4 text-rose-500 animate-pulse" />
+                    <h2 className="text-sm font-display font-bold uppercase tracking-wider text-foreground">
+                      High-Level Trending on Pro Nax
+                    </h2>
                   </div>
                   {trending.length === 0
                     ? <Empty msg="No videos yet — upload to be featured here." />
-                    : <Grid items={trending} showTrendingScore={true} />}
+                    : <Grid items={trending} showTrendingScore={false} />}
                 </section>
 
                 {shorts.length > 0 && (
@@ -278,13 +273,6 @@ function Grid({ items, showTrendingScore }: { items: V[]; showTrendingScore?: bo
             durationText={fmtDur(v.duration_seconds)}
             thumbUrl={v.thumb_url}
             index={i}
-            topBadge={v.trendingInfo ? (
-              <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-background/85 border border-primary/40 text-[10px] font-mono font-bold text-primary backdrop-blur-md shadow-lg flex items-center gap-1 z-10">
-                <Flame className="w-3 h-3 text-rose-500" />
-                <span>#{v.trendingInfo.trendingRank} Trending</span>
-              </div>
-            ) : undefined}
-
           />
         </div>
       ))}

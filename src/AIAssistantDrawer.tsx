@@ -61,35 +61,50 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
     setIsLoading(true);
 
     try {
-      const historyPayload = newMessages.slice(1).map((m) => ({
-        role: m.role === "user" ? "user" : "assistant",
-        content: m.content,
-      }));
-
-      const res = await geminiFetch("creator-assistant", {
+      const res = await geminiFetch("creator-coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: query,
-          history: historyPayload,
+          request: query,
+          metrics: {}, // Add channel metrics if available
+          recentVideos: [], // Add recent videos if available
         }),
       });
 
       const data = await res.json();
-      if (data.response) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.response },
-        ]);
+      
+      // Format the response from the mock API
+      let responseText = "";
+      if (data.advice) {
+        responseText = `**${data.advice}**\n\n`;
+        if (data.suggestions && data.suggestions.length > 0) {
+          responseText += `**Suggestions:**\n${data.suggestions.map((s: string) => `• ${s}`).join('\n')}\n\n`;
+        }
+        if (data.actionItems && data.actionItems.length > 0) {
+          responseText += `**Action Items:**\n${data.actionItems.map((a: string) => `• ${a}`).join('\n')}\n\n`;
+        }
+        if (data.estimatedImpact) {
+          responseText += `**Estimated Impact:** ${data.estimatedImpact}`;
+        }
+        if (data.viralIdeas && data.viralIdeas.length > 0) {
+          responseText += `\n\n**Viral Video Ideas:**\n${data.viralIdeas.map((v: string) => `• ${v}`).join('\n')}`;
+        }
+        if (data.titleExamples && data.titleExamples.length > 0) {
+          responseText += `\n\n**Title Examples:**\n${data.titleExamples.map((t: string) => `• ${t}`).join('\n')}`;
+        }
+        if (data.scriptTemplate) {
+          responseText += `\n\n**Script Template:**\n• Hook: ${data.scriptTemplate.hook}\n• Value: ${data.scriptTemplate.value}\n• Engagement: ${data.scriptTemplate.engagement}\n• CTA: ${data.scriptTemplate.cta}`;
+        }
+      } else if (data.message) {
+        responseText = data.message;
       } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: "Sorry, I ran into an issue connecting to Gemini AI.",
-          },
-        ]);
+        responseText = JSON.stringify(data, null, 2);
       }
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: responseText || "Sorry, I couldn't generate a response." },
+      ]);
     } catch (error) {
       console.error("AI Coach Error:", error);
       setMessages((prev) => [

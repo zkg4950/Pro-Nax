@@ -51,7 +51,7 @@ interface LedgerRow {
 }
 
 export default function WalletPage() {
-  const { session, user, loading: authLoading } = useAuthSession();
+  const { session, user, loading: authLoading, signOut } = useAuthSession();
   const { logs: earningsSeries } = useEarningsSeries(user?.id);
   const [wallet, setWallet] = useState<WalletRowExt | null>(null);
   const [logs, setLogs] = useState<LogRow[]>([]);
@@ -197,9 +197,13 @@ export default function WalletPage() {
     return { avgCpm, fillRate };
   }, [logs]);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    toast.success('Signed out');
+  const handleSignOut = async () => {
+    const result = await signOut();
+    if (result.success) {
+      toast.success('Signed out');
+    } else {
+      toast.error(result.error || 'Failed to sign out');
+    }
   };
 
   if (authLoading) {
@@ -289,7 +293,7 @@ export default function WalletPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </button>
           <button
-            onClick={signOut}
+            onClick={handleSignOut}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass border border-border/50 text-xs text-muted-foreground hover:text-destructive hover:border-destructive/40"
           >
             <LogOut className="w-3.5 h-3.5" /> Sign out

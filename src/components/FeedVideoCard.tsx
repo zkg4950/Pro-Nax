@@ -92,7 +92,7 @@ export function FeedVideoCard({
               alt={title}
               loading={index < 3 ? 'eager' : 'lazy'}
               decoding="async"
-              fetchPriority={index === 0 ? 'high' : 'auto'}
+              fetchPriority={index < 3 ? 'high' : 'low'}
               onError={() => setImgError(true)}
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.025]"
             />

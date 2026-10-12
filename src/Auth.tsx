@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, LogIn, UserPlus, Loader2, ShieldAlert, MailCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/loose';
-import { pronax } from '@/integrations/pronax';
+import { useUnifiedAuth } from '@/lib/unified-auth';
 import { PasswordStrengthMeter } from '@/components/security/PasswordStrengthMeter';
 import { appealSchema, checkPasswordStrength, emailSchema, firstIssue } from '@/lib/validation';
 import { recordAudit, AuditActions } from '@/lib/audit';
@@ -13,6 +13,7 @@ import { formatMoney, DEFAULT_CURRENCY } from '@/lib/money';
 
 export default function Auth() {
   const navigate = useNavigate();
+  const { isAuthed, signInWithEmail, signUpWithEmail, signInWithGoogle, resendVerificationEmail } = useUnifiedAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,14 +27,10 @@ export default function Auth() {
 
   useEffect(() => {
     // If already signed in, redirect to home page
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate('/', { replace: true });
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) navigate('/', { replace: true });
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+    if (isAuthed) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthed, navigate]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,37 +57,26 @@ export default function Auth() {
     setLoading(true);
     try {
       if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
-          email: parsedEmail.data,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
+        const result = await signUpWithEmail(parsedEmail.data, password);
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
         await recordAudit({ action: AuditActions.signUp, entityType: 'user', metadata: { method: 'password' } });
-        // With email confirmation on, signUp returns no session: the user is
-        // NOT signed in until they click the link in their inbox.
-        if (!data.session) {
+        if (result.needsVerification) {
           setAwaitingVerification(true);
           toast.success('Account created — check your email to confirm before signing in.');
         }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: parsedEmail.data,
-          password,
-        });
-        if (error) {
+        const result = await signInWithEmail(parsedEmail.data, password);
+        if (!result.success) {
           await recordAudit({
             action: AuditActions.signInFailed,
             severity: 'warning',
             entityType: 'user',
-            metadata: { email: parsedEmail.data, reason: error.message },
+            metadata: { email: parsedEmail.data, reason: result.error },
           });
-          throw error;
-        }
-        if (!data.user?.email_confirmed_at) {
-          await supabase.auth.signOut();
-          setAwaitingVerification(true);
-          toast.error('Please verify your email address before signing in.');
+          toast.error(result.error);
           return;
         }
         await recordAudit({ action: AuditActions.signIn, entityType: 'user', metadata: { method: 'password' } });
@@ -110,14 +96,10 @@ export default function Auth() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.resend({
-      type: 'signup',
-      email: parsedEmail.data,
-      options: { emailRedirectTo: window.location.origin },
-    });
+    const result = await resendVerificationEmail(parsedEmail.data);
     setLoading(false);
-    if (error) {
-      toast.error(error.message);
+    if (!result.success) {
+      toast.error(result.error);
       return;
     }
     await recordAudit({ action: AuditActions.verificationResent, entityType: 'user' });
@@ -126,11 +108,9 @@ export default function Auth() {
 
   const signInGoogle = async () => {
     setLoading(true);
-    const result = await pronax.auth.signInWithOAuth('google', {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      toast.error(result.error.message || 'Google sign-in failed');
+    const result = await signInWithGoogle();
+    if (!result.success) {
+      toast.error(result.error || 'Google sign-in failed');
       setLoading(false);
     }
   };

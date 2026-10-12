@@ -52,9 +52,41 @@ export function AdminAccessTab() {
       ]);
 
       if (teamRes.error) {
-        // Function missing → database script not applied yet.
-        if (/does not exist/i.test(teamRes.error.message ?? '')) setNeedsSetup(true);
-        throw teamRes.error;
+        // The RPC is missing or out of date on this database — fall back to a
+        // direct read of user_roles so the team list still works.
+        const fallback = await supabase
+          .from('user_roles')
+          .select('user_id, role, created_at')
+          .in('role', ['admin', 'moderator', 'support']);
+
+        if (fallback.error) {
+          if (/does not exist/i.test(teamRes.error.message ?? '')) setNeedsSetup(true);
+          throw teamRes.error;
+        }
+
+        const ids = [...new Set((fallback.data ?? []).map((r: { user_id: string }) => r.user_id))];
+        const profs = ids.length
+          ? await supabase.from('profiles').select('id, email, display_name, avatar_url').in('id', ids)
+          : { data: [] as Array<Record<string, string | null>> };
+        const byId = new Map(
+          ((profs.data ?? []) as Array<{ id: string; email: string | null; display_name: string | null; avatar_url: string | null }>)
+            .map((p) => [p.id, p]),
+        );
+
+        setNeedsSetup(false);
+        setAdmins(
+          (fallback.data ?? []).map((r: { user_id: string; role: string; created_at: string }) => ({
+            user_id: r.user_id,
+            email: byId.get(r.user_id)?.email ?? null,
+            display_name: byId.get(r.user_id)?.display_name ?? r.role,
+            avatar_url: byId.get(r.user_id)?.avatar_url ?? null,
+            is_super: false,
+            granted_at: r.created_at,
+          })) as AdminRow[],
+        );
+        setInvites((inviteRes?.data ?? []) as InviteRow[]);
+        setIsOwner(Boolean(ownerRes?.data));
+        return;
       }
       setNeedsSetup(false);
       setAdmins((teamRes.data ?? []) as AdminRow[]);

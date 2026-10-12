@@ -4,6 +4,7 @@ import { Outlet, useLocation } from '@tanstack/react-router';
 import { AppHeader } from './AppHeader';
 import { AppSidebar } from './AppSidebar';
 import { MobileNav } from './MobileNav';
+import { IpBlockGate } from './IpBlockGate';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 // scroll restoration disabled for now
 
@@ -41,13 +42,16 @@ export function MainLayout() {
 
   if (isStandalonePage) {
     return (
-      <div className="min-h-screen w-full bg-background text-foreground">
-        <Outlet />
-      </div>
+      <IpBlockGate>
+        <div className="min-h-screen w-full bg-background text-foreground">
+          <Outlet />
+        </div>
+      </IpBlockGate>
     );
   }
 
   return (
+    <IpBlockGate>
     <SidebarProvider open={sidebarOpen} onOpenChange={handleSidebarChange}>
       <div className="relative flex h-screen w-screen flex-col overflow-hidden bg-background text-foreground">
 
@@ -91,5 +95,6 @@ export function MainLayout() {
         <MobileNav />
       </div>
     </SidebarProvider>
+    </IpBlockGate>
   );
 }

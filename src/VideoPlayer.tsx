@@ -450,7 +450,7 @@ export function VideoPlayer({
         </div>
       )}
 
-      {/* Professional YouTube-style controls */}
+      {/* Professional ProNax-style controls */}
       {!showAd && (
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 w-full flex flex-col transition-opacity duration-300 ${
@@ -491,7 +491,7 @@ export function VideoPlayer({
                     type="range" min={0} max={1} step={0.01}
                     value={muted ? 0 : volume}
                     onChange={(e) => onVolChange(Number(e.target.value))}
-                    className="youtube-slider w-0 group-hover/vol:w-24 transition-[width] duration-200"
+                    className="ProNax-slider w-0 group-hover/vol:w-24 transition-[width] duration-200"
                     aria-label="Volume"
                   />
                 </div>
@@ -623,7 +623,7 @@ export function VideoPlayer({
       )}
 
       <style>{`
-        .youtube-slider {
+        .ProNax-slider {
           -webkit-appearance: none;
           appearance: none;
           height: 4px;
@@ -631,7 +631,7 @@ export function VideoPlayer({
           border-radius: 2px;
           outline: none;
         }
-        .youtube-slider::-webkit-slider-thumb {
+        .ProNax-slider::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
           width: 12px; height: 12px;
@@ -640,7 +640,7 @@ export function VideoPlayer({
           cursor: pointer;
           box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
-        .youtube-slider::-moz-range-thumb {
+        .ProNax-slider::-moz-range-thumb {
           width: 12px; height: 12px; border: 0;
           border-radius: 50%;
           background: white;

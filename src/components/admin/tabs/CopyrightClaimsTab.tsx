@@ -268,13 +268,13 @@ export function CopyrightClaimsTab() {
     // Log status change to audit trail (fire and forget)
     if (oldStatus && oldStatus !== nextStatus) {
       supabase.auth.getUser().then(({ data: { user } }) => {
-        supabase.rpc('log_status_change_event', {
+        (supabase.rpc('log_status_change_event', {
           p_claim_id: claimId,
-          p_actor_id: user?.id,
+          p_actor_id: user?.id ?? '',
           p_old_status: oldStatus,
           p_new_status: nextStatus,
           p_note: actionNote
-        }).catch(error => console.error('Failed to log status change event:', error));
+        } as never) as unknown as Promise<{ error: unknown }>).catch(error => console.error('Failed to log status change event:', error));
       });
     }
 
@@ -310,13 +310,13 @@ export function CopyrightClaimsTab() {
     // Log policy change to audit trail (fire and forget)
     if (oldPolicy && oldPolicy !== nextPolicy) {
       supabase.auth.getUser().then(({ data: { user } }) => {
-        supabase.rpc('log_policy_change_event', {
+        (supabase.rpc('log_policy_change_event', {
           p_claim_id: claimId,
-          p_actor_id: user?.id,
+          p_actor_id: user?.id ?? '',
           p_old_policy: oldPolicy,
           p_new_policy: nextPolicy,
           p_note: `Policy changed from ${oldPolicy} to ${nextPolicy}`
-        }).catch(error => console.error('Failed to log policy change event:', error));
+        } as never) as unknown as Promise<{ error: unknown }>).catch(error => console.error('Failed to log policy change event:', error));
       });
     }
 

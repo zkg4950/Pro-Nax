@@ -2,6 +2,11 @@
 import { useState, useCallback, useRef } from 'react';
 import { AdSlot, demoAds, getMidrollTimestamps } from '@/lib/adNetworks';
 
+// CRITICAL: This ad manager uses DEMO ADS only and does NOT integrate with the actual
+// monetization system (requestAdImpression, record_ad_view). Mid-roll ads are currently
+// NOT monetized - they are demo placeholders only. To monetize mid-rolls, this hook must
+// be refactored to use the IMA SDK and call requestAdImpression/record_ad_view for each mid-roll.
+
 export interface AdManagerState {
   isAdPlaying: boolean;
   currentAd: AdSlot | null;

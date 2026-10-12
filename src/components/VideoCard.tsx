@@ -55,6 +55,7 @@ export function VideoCard({
               src={thumbnail}
               alt={title}
               loading="lazy"
+              decoding="async"
               onError={() => setImgError(true)}
               className="h-full w-full object-cover"
             />
@@ -86,7 +87,7 @@ export function VideoCard({
     );
   }
 
-  /* ---------------- GRID LAYOUT (Authentic YouTube Mobile Style) ---------------- */
+  /* ---------------- GRID LAYOUT (Mobile Grid Style) ---------------- */
   return (
     <div
       onClick={handleClick}
@@ -100,6 +101,7 @@ export function VideoCard({
               src={thumbnail}
               alt={title}
               loading="lazy"
+              decoding="async"
               onError={() => setImgError(true)}
               className="absolute inset-0 h-full w-full object-cover"
             />
@@ -122,6 +124,8 @@ export function VideoCard({
             <img
               src={channelAvatar}
               alt={channel}
+              loading="lazy"
+              decoding="async"
               className="h-9 w-9 rounded-full object-cover"
             />
           ) : (
@@ -149,7 +153,7 @@ export function VideoCard({
           </div>
         </div>
 
-        {/* YouTube Style 3-Dots Menu Button */}
+        {/* 3-Dots Menu Button */}
         <button
           onClick={(e) => {
             e.stopPropagation();

@@ -28,6 +28,7 @@ interface VideoPlayerProps {
   onVideoEnded?: () => void;
   /** Fires with cumulative watched seconds on pause, end, source change, and unmount. */
   onWatchProgress?: (seconds: number) => void;
+  onPlaybackChange?: (playing: boolean) => void;
   /** Subtitle tracks for the video */
   subtitles?: SubtitleTrack[];
 }
@@ -63,6 +64,7 @@ export function VideoPlayer({
   watchThreshold = 5,
   onVideoEnded,
   onWatchProgress,
+  onPlaybackChange,
   subtitles = [],
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -332,8 +334,8 @@ export function VideoPlayer({
         preload={typeof document !== "undefined" && document.documentElement.dataset.perf === "low" ? "none" : "metadata"}
         className="w-full h-full object-contain"
         onClick={() => !showAd && togglePlay()}
-        onPlay={() => { setPlaying(true); lastTick.current = performance.now(); }}
-        onPause={() => { setPlaying(false); lastTick.current = null; flushProgress(); }}
+        onPlay={() => { setPlaying(true); onPlaybackChange?.(!showAd); lastTick.current = performance.now(); }}
+        onPause={() => { setPlaying(false); onPlaybackChange?.(false); lastTick.current = null; flushProgress(); }}
         onVolumeChange={(e) => {
           const v = e.currentTarget;
           setVolume(v.volume); setMuted(v.muted);
@@ -359,6 +361,7 @@ export function VideoPlayer({
             setShowAd(false);
             onAdEnded?.();
           } else {
+            onPlaybackChange?.(false);
             flushProgress();
             onVideoEnded?.();
           }
@@ -450,7 +453,7 @@ export function VideoPlayer({
         </div>
       )}
 
-      {/* Professional YouTube-style controls */}
+      {/* Professional player controls */}
       {!showAd && (
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 w-full flex flex-col transition-opacity duration-300 ${
@@ -491,7 +494,7 @@ export function VideoPlayer({
                     type="range" min={0} max={1} step={0.01}
                     value={muted ? 0 : volume}
                     onChange={(e) => onVolChange(Number(e.target.value))}
-                    className="youtube-slider w-0 group-hover/vol:w-24 transition-[width] duration-200"
+                    className="pronax-slider w-0 group-hover/vol:w-24 transition-[width] duration-200"
                     aria-label="Volume"
                   />
                 </div>
@@ -623,7 +626,7 @@ export function VideoPlayer({
       )}
 
       <style>{`
-        .youtube-slider {
+        .pronax-slider {
           -webkit-appearance: none;
           appearance: none;
           height: 4px;
@@ -631,7 +634,7 @@ export function VideoPlayer({
           border-radius: 2px;
           outline: none;
         }
-        .youtube-slider::-webkit-slider-thumb {
+        .pronax-slider::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
           width: 12px; height: 12px;
@@ -640,7 +643,7 @@ export function VideoPlayer({
           cursor: pointer;
           box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
-        .youtube-slider::-moz-range-thumb {
+        .pronax-slider::-moz-range-thumb {
           width: 12px; height: 12px; border: 0;
           border-radius: 50%;
           background: white;

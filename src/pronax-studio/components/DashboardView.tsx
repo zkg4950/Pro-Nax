@@ -27,7 +27,7 @@ interface DashboardViewProps {
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
-  channelStats,
+  channelStats: channelStatsProp,
   latestVideo,
   allVideos,
   onOpenUploadModal,
@@ -35,6 +35,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectVideoForAnalytics,
   onSelectView,
 }) => {
+  const channelStats: ChannelStats = channelStatsProp ?? {
+    name: "Your channel",
+    handle: "",
+    avatar: "",
+    banner: "",
+    subscribers: 0,
+    subscriberChange28Days: 0,
+    views28Days: 0,
+    watchTimeHours28Days: 0,
+    estimatedRevenue28Days: 0,
+    realtime48HoursViews: 0,
+    realtime60MinsViews: 0,
+  };
   const topVideos = [...allVideos].sort((a, b) => b.views - a.views).slice(0, 3);
 
   return (

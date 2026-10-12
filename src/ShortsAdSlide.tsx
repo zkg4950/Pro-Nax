@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, SkipForward } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useImaAds } from '@/hooks/useImaAds';
+import { useImaAds } from '@/hooks/useImaAds'; // This is the correct hook with Shorts multiplier
 
 interface ShortsAdSlideProps {
   active: boolean;

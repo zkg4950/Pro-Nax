@@ -140,10 +140,10 @@ export const config: AppConfig = {
   },
   
   supabase: {
-    url: getEnv('SUPABASE_URL'),
-    anonKey: getEnv('SUPABASE_ANON_KEY'),
-    publishableKey: getEnv('SUPABASE_PUBLISHABLE_KEY'),
-    serviceRoleKey: getEnv('SUPABASE_SERVICE_ROLE_KEY'),
+    url: getEnv('VITE_SUPABASE_URL') || getEnv('SUPABASE_URL'),
+    anonKey: getEnv('VITE_SUPABASE_PUBLISHABLE_KEY') || getEnv('SUPABASE_PUBLISHABLE_KEY'),
+    publishableKey: getEnv('VITE_SUPABASE_PUBLISHABLE_KEY') || getEnv('SUPABASE_PUBLISHABLE_KEY'),
+    serviceRoleKey: getEnv('SUPABASE_SECRET_KEY') || getEnv('SUPABASE_SERVICE_ROLE_KEY'),
   },
   
   storage: {
@@ -217,13 +217,13 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   
   if (!config.supabase.url) {
-    errors.push('SUPABASE_URL is required');
+    errors.push('VITE_SUPABASE_URL or SUPABASE_URL is required');
   }
   if (!config.supabase.anonKey) {
-    errors.push('SUPABASE_ANON_KEY is required');
+    errors.push('VITE_SUPABASE_PUBLISHABLE_KEY or SUPABASE_PUBLISHABLE_KEY is required');
   }
   if (!config.supabase.publishableKey) {
-    errors.push('SUPABASE_PUBLISHABLE_KEY is required');
+    errors.push('VITE_SUPABASE_PUBLISHABLE_KEY or SUPABASE_PUBLISHABLE_KEY is required');
   }
   
   if (config.storage.provider === 'r2') {

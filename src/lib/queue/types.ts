@@ -14,7 +14,8 @@ export type JobType =
   | 'content-moderation'
   | 'copyright-check'
   | 'thumbnail-generation'
-  | 'subtitle-generation';
+  | 'subtitle-generation'
+  | 'supervisor-check';
 
 /**
  * Video Processing Job Data
@@ -125,6 +126,16 @@ export interface SubtitleGenerationJobData {
   videoPath: string;
   languages: string[];
   autoGenerate?: boolean;
+}
+
+/**
+ * Supervisor Check Job Data
+ */
+export interface SupervisorCheckJobData {
+  eventType?: string;
+  severity?: string;
+  data?: Record<string, any>;
+  source?: string;
 }
 
 /**
@@ -283,7 +294,8 @@ export type JobDataUnion =
   | ContentModerationJobData
   | CopyrightCheckJobData
   | ThumbnailGenerationJobData
-  | SubtitleGenerationJobData;
+  | SubtitleGenerationJobData
+  | SupervisorCheckJobData;
 
 /**
  * Job Result Union

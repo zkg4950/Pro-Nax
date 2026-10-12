@@ -1,15 +1,15 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
 import { Link, useLocation } from '@tanstack/react-router';
-import { Home, Compass, PlusSquare, PlaySquare, User } from 'lucide-react';
+import { Home, PlusSquare, PlaySquare, User, Compass } from 'lucide-react';
 
 export function MobileNav() {
   const location = useLocation();
 
   const navItems = [
     { icon: Home, label: 'Home', to: '/' },
-    { icon: Compass, label: 'Explore', to: '/explore' },
-    { icon: PlusSquare, label: 'Upload', to: '/upload' },
     { icon: PlaySquare, label: 'Shorts', to: '/shorts' },
+    { icon: PlusSquare, label: 'Upload', to: '/upload' },
+    { icon: Compass, label: 'Explore', to: '/explore' },
     { icon: User, label: 'Profile', to: '/profile' },
   ];
 
@@ -18,6 +18,7 @@ export function MobileNav() {
       className="fixed bottom-0 left-0 right-0 h-14 md:hidden flex justify-around items-center bg-black border-t border-zinc-800/80 z-50 px-1 pb-safe"
       style={{ perspective: '600px' }}
     >
+
       {navItems.map(({ icon: Icon, label, to }) => {
         const isActive = location.pathname === to;
         return (
@@ -29,7 +30,7 @@ export function MobileNav() {
             }`}
           >
             <span
-              className={`grid place-items-center rounded-xl transition-transform duration-200 ${
+              className={`relative grid place-items-center rounded-xl transition-transform duration-200 ${
                 isActive
                   ? 'bg-cyan-400/10 shadow-[0_4px_10px_-4px_rgba(34,211,238,0.8),inset_0_1px_0_rgba(255,255,255,0.15)] -translate-y-0.5'
                   : 'shadow-[0_2px_4px_-3px_rgba(0,0,0,0.9)]'
@@ -42,6 +43,7 @@ export function MobileNav() {
           </Link>
         );
       })}
+
     </nav>
   );
 }

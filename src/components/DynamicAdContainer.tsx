@@ -1,6 +1,10 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAdSlot, bumpAdImpression } from '@/hooks/useAdSlot';
+import { AdErrorBoundary } from '@/components/ads/AdErrorBoundary';
+import { AdLoadingPlaceholder } from '@/components/ads/AdLoadingPlaceholder';
+import { useAdPerformance } from '@/lib/ad-performance';
+import { useAdBlockDetection } from '@/lib/adblock-detection';
 
 export type AdFormat = 'html_script' | 'api_url';
 
@@ -17,26 +21,114 @@ interface DynamicAdContainerProps {
   className?: string;
   /** Optional click-through URL used for image creatives served from an API URL. */
   clickUrl?: string;
+  /** Index for debugging and tracking */
+  index?: number;
 }
 
 /**
- * Reusable ad surface locked to a 16:9 box so it drops into the video grid
- * without shifting any neighbouring card. HTML/JS creatives run inside a
- * sandboxed iframe (isolated origin, no access to app DOM/storage); plain
- * URLs render as an image or video creative.
+ * Enhanced ad surface with proper loading states, error boundaries, layout shift prevention,
+ * ad blocking detection, and performance monitoring.
  */
-export function DynamicAdContainer({ placement, className, clickUrl }: DynamicAdContainerProps) {
+export function DynamicAdContainer({ placement, className, clickUrl, index }: DynamicAdContainerProps) {
   const { row, loading } = useAdSlot(placement);
+  const [adLoaded, setAdLoaded] = useState(false);
+  const [adError, setAdError] = useState(false);
+  const [adVisible, setAdVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const bumped = useRef(false);
   const code = row?.html_snippet?.trim() || '';
+  
+  // Performance monitoring
+  const { metrics, recordLoad, recordRender, recordVisible, recordError, recordBlocked } = useAdPerformance(placement);
+  
+  // Ad blocking detection
+  const adBlockDetection = useAdBlockDetection();
 
+  // Track visibility
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !adVisible) {
+            setAdVisible(true);
+            recordVisible();
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(containerRef.current);
+
+    return () => observer.disconnect();
+  }, [adVisible, recordVisible]);
+
+  // Track impression bump
   useEffect(() => {
     if (!row?.enabled || !code || bumped.current) return;
     bumped.current = true;
     bumpAdImpression(placement);
-  }, [row, code, placement]);
+    recordLoad();
+  }, [row, code, placement, recordLoad]);
 
-  if (loading || !row?.enabled || !code) return null;
+  // Track ad blocking
+  useEffect(() => {
+    if (adBlockDetection.isBlocked) {
+      recordBlocked();
+      console.log('[DynamicAdContainer] Ad blocked for placement:', placement, adBlockDetection);
+    }
+  }, [adBlockDetection, placement, recordBlocked]);
+
+  // Track render time
+  useEffect(() => {
+    if (adLoaded && !adError) {
+      // Small delay to ensure render is complete
+      const timer = setTimeout(() => {
+        recordRender();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [adLoaded, adError, recordRender]);
+
+  // Handle ad load completion
+  const handleAdLoad = () => {
+    setAdLoaded(true);
+    setAdError(false);
+  };
+
+  // Handle ad error
+  const handleAdError = (error: any) => {
+    console.error('[DynamicAdContainer] Ad error for placement:', placement, error);
+    setAdError(true);
+    recordError(error);
+  };
+
+  // Show loading placeholder while loading
+  if (loading) {
+    return <AdLoadingPlaceholder className={className} placement={placement} />;
+  }
+
+  // Show nothing if ad is disabled or no code
+  if (!row?.enabled || !code) {
+    return null;
+  }
+
+  // Show error state if ad failed to load
+  if (adError) {
+    return (
+      <div 
+        className={`relative aspect-video w-full overflow-hidden rounded-xl border border-white/5 bg-muted/20 flex items-center justify-center ${className}`}
+        data-ad-placement={placement}
+        data-ad-error="true"
+      >
+        <div className="text-center text-muted-foreground text-xs">
+          <p>Advertisement unavailable</p>
+        </div>
+      </div>
+    );
+  }
 
   const format = detectAdFormat(code);
   const isVideo = format === 'api_url' && /\.(mp4|webm|m3u8)(\?|$)/i.test(code);
@@ -53,9 +145,19 @@ export function DynamicAdContainer({ placement, className, clickUrl }: DynamicAd
           muted
           loop
           playsInline
+          onLoad={handleAdLoad}
+          onError={handleAdError}
         />
       ) : (
-        <img src={code} alt="Sponsored" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+        <img 
+          src={code} 
+          alt="Sponsored" 
+          loading="lazy" 
+          decoding="async" 
+          className="absolute inset-0 h-full w-full object-cover"
+          onLoad={handleAdLoad}
+          onError={handleAdError}
+        />
       )
     ) : (
       <iframe
@@ -65,6 +167,8 @@ export function DynamicAdContainer({ placement, className, clickUrl }: DynamicAd
         loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
         className="absolute inset-0 h-full w-full border-0"
+        onLoad={handleAdLoad}
+        onError={handleAdError}
       />
     );
 
@@ -74,22 +178,47 @@ export function DynamicAdContainer({ placement, className, clickUrl }: DynamicAd
       <span className="pointer-events-none absolute left-2 top-2 z-10 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white/90">
         Sponsored
       </span>
+      {/* Performance indicator (development only) */}
+      {process.env.NODE_ENV === 'development' && metrics && (
+        <div className="absolute bottom-2 right-2 z-10 rounded bg-black/70 px-1.5 py-0.5 text-[9px] text-white/90">
+          {metrics.loadTime}ms
+        </div>
+      )}
     </div>
   );
 
   return (
-    <div
-      className={className ?? 'v3d-stage group relative w-full px-3 sm:px-0 pb-1 pt-2'}
-      data-ad-placement={placement}
-      aria-label="Advertisement"
+    <AdErrorBoundary
+      placement={placement}
+      onError={(error, errorInfo) => {
+        console.error('[DynamicAdContainer] Error boundary caught:', placement, error, errorInfo);
+        handleAdError(error);
+      }}
     >
-      {format === 'api_url' && clickUrl ? (
-        <a href={clickUrl} target="_blank" rel="noopener noreferrer sponsored" className="block w-full">
-          {body}
-        </a>
-      ) : (
-        body
-      )}
-    </div>
+      <div
+        ref={containerRef}
+        className={className ?? 'v3d-stage group relative w-full px-3 sm:px-0 pb-1 pt-2'}
+        data-ad-placement={placement}
+        data-ad-index={index}
+        data-ad-loaded={adLoaded}
+        data-ad-visible={adVisible}
+        data-ad-blocked={adBlockDetection.isBlocked}
+        aria-label="Advertisement"
+      >
+        {format === 'api_url' && clickUrl ? (
+          <a 
+            href={clickUrl} 
+            target="_blank" 
+            rel="noopener noreferrer sponsored" 
+            className="block w-full"
+            onClick={() => recordVisible()} // Track clicks
+          >
+            {body}
+          </a>
+        ) : (
+          body
+        )}
+      </div>
+    </AdErrorBoundary>
   );
 }

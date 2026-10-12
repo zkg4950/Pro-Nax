@@ -4,8 +4,8 @@
 # Supabase temp secrets
 supabase/.temp/
 
-# FFmpeg binaries (optional - uncomment if you want to add ffmpeg to your repo)
-# ffmpeg/
+# FFmpeg binaries
+ffmpeg/
 
 # Logs
 logs

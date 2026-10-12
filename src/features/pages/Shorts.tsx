@@ -711,25 +711,18 @@ export default function Shorts() {
         if (!rankedError && ranked?.length) rows = ranked;
 
         if (!rows) {
-          const { data } = await supabase.from('videos').select('id,title,description,video_url,thumb_url,owner_id,tags,views_count').eq('is_short', true).eq('is_removed', false).eq('is_shadow_banned', false).eq('visibility', 'public').order('created_at', { ascending: false }).limit(20);
+          const { data } = await supabase.from('videos').select('id,title,description,video_url,thumb_url,owner_id,tags,views_count,likes_count').eq('is_short', true).eq('is_removed', false).eq('is_shadow_banned', false).eq('visibility', 'public').order('created_at', { ascending: false }).limit(20);
           rows = data ?? [];
         }
 
         if (!rows.length) return;
 
         const ownerIds = Array.from(new Set(rows.map((video: any) => video.owner_id).filter(Boolean)));
-        const videoIds = rows.map((video: any) => video.id);
         const profileMap = new Map<string, any>();
-        const likesMap = new Map<string, number>();
 
         if (ownerIds.length) {
           const { data: profiles } = await supabase.from('profiles').select('id,display_name,avatar_url,handle').in('id', ownerIds);
           (profiles ?? []).forEach((profile: any) => profileMap.set(profile.id, profile));
-        }
-
-        if (videoIds.length) {
-          const { data: likes } = await supabase.from('video_likes').select('video_id').in('video_id', videoIds);
-          (likes ?? []).forEach((row: any) => likesMap.set(row.video_id, (likesMap.get(row.video_id) ?? 0) + 1));
         }
 
         const mapped: Short[] = rows.filter((video: any) => typeof video.video_url === 'string' && video.video_url.startsWith('http')).map((video: any) => {
@@ -745,7 +738,7 @@ export default function Shorts() {
             displayName: profile.display_name || channelHandle,
             avatar: profile.avatar_url,
             description: video.description || '',
-            likes: likesMap.get(video.id) ?? 0,
+            likes: Number(video.likes_count ?? 0),
             comments: 0,
             shares: 0,
             music: `original sound - ${profile.display_name || channelHandle}`,

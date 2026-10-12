@@ -16,8 +16,38 @@ import type {
   ContentModerationResult,
   CopyrightCheckResult,
 } from './types';
-import { supabase } from '@/integrations/supabase/loose';
+import { executeSupervisor } from '../../agents/supervisorGraph';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 import { config } from '@/config/app.config';
+
+// Load environment variables
+if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
+
+/**
+ * Create Supabase client that works in both Node.js and browser contexts
+ */
+function getSupabaseClient() {
+  const url = config.supabase.url;
+  const key = config.supabase.serviceRoleKey || config.supabase.publishableKey;
+
+  if (!url || !key) {
+    console.error('[Queue Handlers] Missing Supabase credentials');
+    throw new Error('Supabase credentials not available');
+  }
+
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+// Create client instance
+const supabase = getSupabaseClient();
 
 /**
  * Video Processing Handler
@@ -570,6 +600,45 @@ export async function handleSubtitleGeneration(
 }
 
 /**
+ * Supervisor Check Handler
+ * Triggers supervisor to check system health and take autonomous actions
+ */
+export async function handleSupervisorCheck(
+  job: Job<JobDataUnion, JobResultUnion>
+): Promise<JobResultUnion> {
+  const data = job.data as any;
+
+  try {
+    console.log('[Supervisor Check] Running supervisor check:', data);
+
+    // Execute supervisor with event data
+    const event = {
+      type: data.eventType || 'system_health_check',
+      severity: data.severity || 'info',
+      data: data.data || {},
+      timestamp: new Date(),
+      source: data.source || 'queue_worker',
+    };
+
+    const result = await executeSupervisor(event);
+
+    return {
+      success: true,
+      data: {
+        ...result,
+        checkedAt: new Date(),
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      retryable: true,
+    };
+  }
+}
+
+/**
  * Job Handler Registry
  * Maps job types to their handlers
  */
@@ -584,4 +653,5 @@ export const jobHandlers: Record<JobType, (job: Job<JobDataUnion, JobResultUnion
   'copyright-check': handleCopyrightCheck,
   'thumbnail-generation': handleThumbnailGeneration,
   'subtitle-generation': handleSubtitleGeneration,
+  'supervisor-check': handleSupervisorCheck,
 };

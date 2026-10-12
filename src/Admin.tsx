@@ -1,16 +1,22 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from '@/lib/router-compat';
 import { motion } from 'framer-motion';
-import { Shield, ShieldCheck, Loader2, Home, ShieldAlert, LayoutDashboard, Activity, Eye, Video, ShieldAlert as ShieldAlertIcon, Flag, Gavel, ShieldCheck as ShieldCheckIcon, Wallet, Megaphone, Cpu, Users, Tag as TagIcon, Settings as SettingsIcon, Sliders, KeyRound, ScrollText, Gauge, AlertTriangle } from 'lucide-react';
+import { Shield, ShieldCheck, Loader2, Home, ShieldAlert, LayoutDashboard, Activity, Eye, Video, ShieldAlert as ShieldAlertIcon, Flag, Gavel, ShieldCheck as ShieldCheckIcon, Wallet, Megaphone, Cpu, Users, Tag as TagIcon, Settings as SettingsIcon, Sliders, KeyRound, ScrollText, Gauge, AlertTriangle, RefreshCw, AlertCircle, Clock } from 'lucide-react';
 import { lazy, Suspense } from 'react';
 import { EngineBoundary } from '@/components/EngineBoundary';
 import { AdminShell, type AdminNavItem } from '@/components/admin/AdminShell';
 import { moderationQueue } from '@/lib/moderationQueue';
 import { toast } from 'sonner';
-import { supabase as _supabase } from '@/integrations/supabase/loose';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const supabase: any = _supabase;
+import { useUnifiedAuth } from '@/lib/unified-auth';
+import { 
+  validateSession, 
+  checkUserRoles, 
+  checkBootstrapStatus, 
+  claimInitialAdminRole,
+  setupSessionTimeout,
+  type AuthError 
+} from '@/lib/admin-auth';
 
 // Lazy load tab components
 const CommandCenterTab = lazy(() => import('@/components/admin/CommandCenter').then(m => ({ default: m.CommandCenterTab })));
@@ -46,14 +52,20 @@ function TabLoader() {
 }
 
 type Tab = 'preview' | 'command' | 'app' | 'categories' | 'algorithm' | 'realtime' | 'users' | 'videos' | 'copyright' | 'reports' | 'moderation' | 'appeals' | 'settings' | 'wallets' | 'withdrawals' | 'audit' | 'auditlogs' | 'ratelimits' | 'monitor' | 'ads' | 'admanager' | 'access' | 'strikes';
-type AdminState = 'checking' | 'bootstrap' | 'denied' | 'authed';
+type AdminState = 'checking' | 'bootstrap' | 'denied' | 'authed' | 'error';
 
 
 export default function Admin() {
   const navigate = useNavigate();
+  const { signOut: unifiedSignOut } = useUnifiedAuth();
   const [state, setState] = useState<AdminState>('checking');
   const [tab, setTab] = useState<Tab>('command');
   const [claimingAdmin, setClaimingAdmin] = useState(false);
+  const [authError, setAuthError] = useState<AuthError | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [sessionTimeoutWarning, setSessionTimeoutWarning] = useState(false);
+  const cleanupSessionTimeoutRef = useRef<(() => void) | null>(null);
+  
   const [userRoles, setUserRoles] = useState<{ isAdmin: boolean; isModerator: boolean; isSupport: boolean }>({
     isAdmin: false,
     isModerator: false,
@@ -63,47 +75,172 @@ export default function Admin() {
   // Authorization is decided by the database only. There is deliberately no
   // client-side escape hatch (localStorage flag, env override, dev bypass):
   // any such flag would be a full privilege escalation for every visitor.
-  const checkAdmin = useCallback(() => {
+  const checkAdmin = useCallback(async (isRetry = false) => {
     let cancelled = false;
-    (async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { if (!cancelled) setState('denied'); return; }
-
-        // Check all roles via authoritative server-side RPCs
-        const [adminCheck, moderatorCheck, supportCheck] = await Promise.all([
-          supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' }),
-          supabase.rpc('has_role', { _user_id: user.id, _role: 'moderator' }),
-          supabase.rpc('has_role', { _user_id: user.id, _role: 'support' }),
-        ]);
-
-        const isAdmin = adminCheck.data === true;
-        const isModerator = moderatorCheck.data === true;
-        const isSupport = supportCheck.data === true;
-
-        setUserRoles({ isAdmin, isModerator, isSupport });
-
-        if (!cancelled && isAdmin) { setState('authed'); return; }
-        if (!cancelled && isModerator) { setState('authed'); return; }
-
-        // Bootstrap: only offered when the platform genuinely has no admin yet.
-        try {
-          const { data: boot } = await supabase.rpc('admin_bootstrap_status' as any);
-          if (!cancelled && (boot as any)?.is_admin) { setState('authed'); return; }
-          if (!cancelled && (boot as any)?.can_claim_initial_admin) { setState('bootstrap'); return; }
-        } catch {
-          // RPC unavailable — fall through to denied rather than granting access.
-        }
-
-        if (!cancelled) setState('denied');
-      } catch {
-        if (!cancelled) setState('denied');
+    
+    try {
+      // Reset error state on new check
+      if (!isRetry) {
+        setAuthError(null);
+        setRetryCount(0);
       }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
-  useEffect(() => checkAdmin(), [checkAdmin]);
+      // Validate session first
+      const sessionResult = await validateSession();
+      if (!sessionResult.valid || cancelled) {
+        if (!cancelled) {
+          setAuthError(sessionResult.error);
+          setState('denied');
+        }
+        return;
+      }
+
+      const user = sessionResult.user;
+      
+      // Check all roles via authoritative server-side RPCs with retry logic
+      const rolesResult = await checkUserRoles(user.id);
+      
+      if (cancelled) return;
+
+      if (rolesResult.error) {
+        setAuthError(rolesResult.error);
+        
+        // Auto-retry for retryable errors
+        if (rolesResult.error.retryable && retryCount < 3) {
+          setRetryCount(prev => prev + 1);
+          toast.info(`Connection issue. Retrying... (${retryCount + 1}/3)`);
+          setTimeout(() => checkAdmin(true), 1000 * Math.pow(2, retryCount));
+          return;
+        }
+        
+        setState('error');
+        return;
+      }
+
+      setUserRoles(rolesResult.roles);
+
+      // Grant access if user has admin or moderator role
+      if (rolesResult.roles.isAdmin || rolesResult.roles.isModerator) {
+        setState('authed');
+        return;
+      }
+
+      // Bootstrap: only offered when the platform genuinely has no admin yet.
+      const bootstrapResult = await checkBootstrapStatus();
+      
+      if (cancelled) return;
+
+      if (bootstrapResult.error) {
+        // Bootstrap check failed, but this is non-critical
+        console.warn('[Admin] Bootstrap check failed:', bootstrapResult.error);
+      }
+
+      if (bootstrapResult.isAdmin) {
+        setState('authed');
+        return;
+      }
+
+      if (bootstrapResult.canClaim) {
+        setState('bootstrap');
+        return;
+      }
+
+      setState('denied');
+    } catch (error) {
+      if (!cancelled) {
+        const classifiedError = authError || classifyAuthError(error);
+        setAuthError(classifiedError);
+        
+        // Auto-retry for retryable errors
+        if (classifiedError.retryable && retryCount < 3) {
+          setRetryCount(prev => prev + 1);
+          toast.info(`Connection issue. Retrying... (${retryCount + 1}/3)`);
+          setTimeout(() => checkAdmin(true), 1000 * Math.pow(2, retryCount));
+          return;
+        }
+        
+        setState('error');
+      }
+    }
+    
+    return () => { cancelled = true; };
+  }, [retryCount, authError]);
+
+  // Function to classify errors when needed
+  const classifyAuthError = (error: any): AuthError => {
+    if (!error) {
+      return {
+        type: 'unknown',
+        message: 'Unknown authentication error',
+        userFriendlyMessage: 'An unexpected error occurred during authentication',
+        retryable: true,
+      };
+    }
+
+    const errorMessage = error.message || String(error);
+    
+    // Network errors
+    if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+      return {
+        type: 'network',
+        message: errorMessage,
+        userFriendlyMessage: 'Network connection failed. Please check your internet connection.',
+        retryable: true,
+      };
+    }
+
+    // Session errors
+    if (errorMessage.includes('session') || errorMessage.includes('JWT')) {
+      return {
+        type: 'session',
+        message: errorMessage,
+        userFriendlyMessage: 'Your session has expired. Please sign in again.',
+        retryable: false,
+      };
+    }
+
+    // Default
+    return {
+      type: 'unknown',
+      message: errorMessage,
+      userFriendlyMessage: 'An unexpected error occurred. Please try again.',
+      retryable: true,
+    };
+  };
+
+  useEffect(() => {
+    checkAdmin();
+  }, [checkAdmin]);
+
+  // Setup session timeout monitoring
+  useEffect(() => {
+    if (state !== 'authed') return;
+
+    const handleSessionTimeout = () => {
+      setSessionTimeoutWarning(true);
+      toast.warning('Session expiring soon due to inactivity', {
+        description: 'Please interact with the page to keep your session active.',
+        duration: 10000,
+      });
+      
+      // Force logout after extended inactivity
+      setTimeout(() => {
+        toast.error('Session expired due to inactivity', {
+          description: 'Please sign in again to continue.',
+        });
+        setState('denied');
+      }, 5 * 60 * 1000); // 5 more minutes after warning
+    };
+
+    cleanupSessionTimeoutRef.current = setupSessionTimeout(handleSessionTimeout, 30); // 30 minutes
+
+    return () => {
+      if (cleanupSessionTimeoutRef.current) {
+        cleanupSessionTimeoutRef.current();
+      }
+    };
+  }, [state]);
+
   // Boot the moderation worker as soon as admin lands, so any queue persisted
   // from a previous session drains in the background.
   useEffect(() => { moderationQueue.init(); }, []);
@@ -111,18 +248,50 @@ export default function Admin() {
   const claimInitialAdmin = async () => {
     setClaimingAdmin(true);
     try {
-      const { data, error } = await supabase.rpc('claim_initial_admin' as any);
-      if (error) { toast.error(error.message || 'Could not claim admin role'); return; }
-      if ((data as any)?.ok === false) {
-        toast.error((data as any)?.error || 'An administrator already exists');
+      const result = await claimInitialAdminRole();
+      
+      if (!result.success) {
+        toast.error(result.error?.userFriendlyMessage || 'Could not claim admin role', {
+          description: result.error?.message,
+        });
         return;
       }
-      toast.success('Admin role granted');
+      
+      toast.success('Admin role granted successfully', {
+        description: 'You now have full access to the admin console.',
+      });
       setState('authed');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not claim admin role');
+      const error = classifyAuthError(err);
+      toast.error(error.userFriendlyMessage, {
+        description: error.message,
+      });
     } finally {
       setClaimingAdmin(false);
+    }
+  };
+
+  const handleRetry = () => {
+    setRetryCount(0);
+    setAuthError(null);
+    setState('checking');
+    checkAdmin();
+  };
+
+  const handleSignOut = async () => {
+    try {
+      const result = await unifiedSignOut();
+      if (result.success) {
+        navigate('/auth', { replace: true });
+      } else {
+        toast.error('Failed to sign out', {
+          description: result.error || 'Please try again or clear your browser cookies.',
+        });
+      }
+    } catch (error) {
+      toast.error('Failed to sign out', {
+        description: 'Please try again or clear your browser cookies.',
+      });
     }
   };
 
@@ -133,13 +302,90 @@ export default function Admin() {
         <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
           className="glass-strong rounded-2xl px-8 py-6 flex items-center gap-3 border border-primary/30 glow-primary">
           <Loader2 className="w-5 h-5 animate-spin text-primary" />
-          <span className="text-sm font-medium">Verifying admin credentials…</span>
+          <span className="text-sm font-medium">
+            {retryCount > 0 ? `Retrying authentication... (${retryCount}/3)` : 'Verifying admin credentials…'}
+          </span>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <div className="flex-1 flex items-center justify-center min-h-screen px-4">
+        <motion.div initial={{ opacity: 0, y: 20, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+          className="glass-strong rounded-3xl border border-amber-500/40 p-8 max-w-lg w-full text-center relative overflow-hidden shadow-2xl"
+          style={{ boxShadow: '0 0 60px -10px hsl(45, 100%, 50% / 0.4), inset 0 0 30px hsl(45, 100%, 50% / 0.05)' }}>
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-primary/10 pointer-events-none" />
+          <motion.div animate={{ rotate: [0, -8, 8, -4, 4, 0] }} transition={{ duration: 0.8, delay: 0.2 }}
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/40 mb-4 relative">
+            <AlertCircle className="w-8 h-8 text-amber-500" />
+          </motion.div>
+          <h1 className="text-4xl font-display font-bold text-glow mb-1 tracking-tight">Authentication Error</h1>
+          <h2 className="text-lg font-semibold mb-2 text-foreground">PRO NAX Enterprise Console</h2>
+          <p className="text-xs text-muted-foreground mb-6 max-w-sm mx-auto">
+            {authError?.userFriendlyMessage || 'An error occurred during authentication. Please try again.'}
+          </p>
+
+          {authError && (
+            <div className="mb-6 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-left">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="w-3 h-3 text-amber-400" />
+                <span className="text-[10px] font-mono text-amber-400 uppercase">Error Details</span>
+              </div>
+              <p className="text-[11px] text-amber-300 font-mono break-all">{authError.message}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`text-[9px] px-2 py-0.5 rounded font-mono ${
+                  authError.type === 'network' ? 'bg-blue-500/20 text-blue-300' :
+                  authError.type === 'session' ? 'bg-purple-500/20 text-purple-300' :
+                  authError.type === 'permission' ? 'bg-red-500/20 text-red-300' :
+                  'bg-gray-500/20 text-gray-300'
+                }`}>
+                  {authError.type.toUpperCase()}
+                </span>
+                {authError.retryable && (
+                  <span className="text-[9px] px-2 py-0.5 rounded font-mono bg-green-500/20 text-green-300">
+                    RETRYABLE
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2.5 relative max-w-xs mx-auto">
+            {authError?.retryable && (
+              <button
+                onClick={handleRetry}
+                className="glass border border-primary/40 py-2 rounded-xl text-xs font-semibold hover:border-primary/60 transition text-primary flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Retry Authentication
+              </button>
+            )}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => navigate('/', { replace: true })}
+                className="flex-1 glass border border-border/40 py-2 rounded-xl text-xs font-semibold hover:border-primary/40 transition text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5"
+              >
+                <Home className="w-3.5 h-3.5" /> Back Home
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="flex-1 glass border border-border/40 py-2 rounded-xl text-xs font-semibold hover:border-destructive/40 transition text-muted-foreground hover:text-destructive flex items-center justify-center gap-1.5"
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
         </motion.div>
       </div>
     );
   }
 
   if (state === 'denied') {
+    const isSessionError = authError?.type === 'session';
+    const isPermissionError = authError?.type === 'permission';
+    
     return (
       <div className="flex-1 flex items-center justify-center min-h-screen px-4">
         <motion.div initial={{ opacity: 0, y: 20, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -151,16 +397,39 @@ export default function Admin() {
             className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-destructive/15 border border-destructive/40 mb-4 relative">
             <ShieldAlert className="w-8 h-8 text-destructive" />
           </motion.div>
-          <h1 className="text-4xl font-display font-bold text-glow mb-1 tracking-tight">404 - Access Restricted</h1>
+          <h1 className="text-4xl font-display font-bold text-glow mb-1 tracking-tight">
+            {isSessionError ? 'Session Expired' : 'Access Restricted'}
+          </h1>
           <h2 className="text-lg font-semibold mb-2 text-foreground">PRO NAX Enterprise Console</h2>
           <p className="text-xs text-muted-foreground mb-6 max-w-sm mx-auto">
-            This account does not hold the administrator role. Access to the enterprise
-            console is granted by an existing administrator only.
+            {isSessionError 
+              ? authError?.userFriendlyMessage || 'Your session has expired. Please sign in again to access the admin console.'
+              : isPermissionError
+              ? authError?.userFriendlyMessage || 'This account does not hold the required role. Access to the enterprise console is granted by an existing administrator only.'
+              : authError?.userFriendlyMessage || 'This account does not hold the administrator role. Access to the enterprise console is granted by an existing administrator only.'
+            }
           </p>
 
+          {authError && (
+            <div className="mb-6 p-3 rounded-xl bg-destructive/10 border border-destructive/30 text-left">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertCircle className="w-3 h-3 text-destructive" />
+                <span className="text-[10px] font-mono text-destructive uppercase">Access Details</span>
+              </div>
+              <p className="text-[11px] text-destructive-foreground break-all">{authError.message}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`text-[9px] px-2 py-0.5 rounded font-mono ${
+                  authError.type === 'session' ? 'bg-purple-500/20 text-purple-300' :
+                  authError.type === 'permission' ? 'bg-red-500/20 text-red-300' :
+                  'bg-gray-500/20 text-gray-300'
+                }`}>
+                  {authError.type.toUpperCase()}
+                </span>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2.5 relative max-w-xs mx-auto">
-
-
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={() => navigate('/', { replace: true })}
@@ -169,10 +438,10 @@ export default function Admin() {
                 <Home className="w-3.5 h-3.5" /> Back Home
               </button>
               <button
-                onClick={() => navigate('/auth')}
-                className="flex-1 glass border border-border/40 py-2 rounded-xl text-xs font-semibold hover:border-primary/40 transition text-muted-foreground hover:text-foreground"
+                onClick={isSessionError ? handleSignOut : () => navigate('/auth')}
+                className="flex-1 glass border border-border/40 py-2 rounded-xl text-xs font-semibold hover:border-primary/40 transition text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5"
               >
-                Sign In
+                {isSessionError ? 'Sign Out' : 'Sign In'}
               </button>
             </div>
           </div>
@@ -261,6 +530,29 @@ export default function Admin() {
       items={navItems}
       activeId={tab}
       onSelect={(id) => setTab(id as Tab)}
+      sessionTimeoutWarning={sessionTimeoutWarning}
+      onRefreshSession={() => {
+        setSessionTimeoutWarning(false);
+        // Reset session timeout by re-triggering activity
+        if (cleanupSessionTimeoutRef.current) {
+          cleanupSessionTimeoutRef.current();
+        }
+        const handleSessionTimeout = () => {
+          setSessionTimeoutWarning(true);
+          toast.warning('Session expiring soon due to inactivity', {
+            description: 'Please interact with the page to keep your session active.',
+            duration: 10000,
+          });
+          
+          setTimeout(() => {
+            toast.error('Session expired due to inactivity', {
+              description: 'Please sign in again to continue.',
+            });
+            setState('denied');
+          }, 5 * 60 * 1000);
+        };
+        cleanupSessionTimeoutRef.current = setupSessionTimeout(handleSessionTimeout, 30);
+      }}
     >
       <Suspense fallback={<TabLoader />}>
         <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>

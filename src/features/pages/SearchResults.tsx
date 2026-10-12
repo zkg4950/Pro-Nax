@@ -78,10 +78,10 @@ export default function SearchResults() {
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
-    category: search.category,
-    uploadDate: search.uploadDate,
-    duration: search.duration,
-    type: search.type,
+    category: search.category ?? undefined,
+    uploadDate: search.uploadDate ?? undefined,
+    duration: search.duration ?? undefined,
+    type: search.type ?? undefined,
     sort: search.sort || 'relevance',
   });
   const [showFilters, setShowFilters] = useState(false);
@@ -92,10 +92,10 @@ export default function SearchResults() {
   useEffect(() => {
     setQuery(search.q || '');
     setFilters({
-      category: search.category,
-      uploadDate: search.uploadDate,
-      duration: search.duration,
-      type: search.type,
+      category: search.category ?? undefined,
+      uploadDate: search.uploadDate ?? undefined,
+      duration: search.duration ?? undefined,
+      type: search.type ?? undefined,
       sort: search.sort || 'relevance',
     });
     setOffset(0);
@@ -108,10 +108,10 @@ export default function SearchResults() {
     try {
       const { data, error } = await supabase.rpc('search_videos', {
         p_query: query.trim(),
-        p_category: filters.category === 'All' ? null : filters.category,
-        p_upload_date: filters.uploadDate === 'any' ? null : filters.uploadDate,
-        p_duration_filter: filters.duration === 'any' ? null : filters.duration,
-        p_video_type: filters.type === 'any' ? null : filters.type,
+        p_category: filters.category === 'All' ? undefined : filters.category,
+        p_upload_date: filters.uploadDate === 'any' ? undefined : filters.uploadDate,
+        p_duration_filter: filters.duration === 'any' ? undefined : filters.duration,
+        p_video_type: filters.type === 'any' ? undefined : filters.type,
         p_sort_by: filters.sort || 'relevance',
         p_limit: 20,
         p_offset: newOffset,
@@ -135,7 +135,7 @@ export default function SearchResults() {
       // Log search analytics
       if (newOffset === 0) {
         await supabase.rpc('log_search_analytics', {
-          p_user_id: user?.id || null,
+          p_user_id: user?.id || undefined,
           p_query: query.trim(),
           p_results_count: newResults.length,
           p_filters: filters as any,
@@ -143,7 +143,38 @@ export default function SearchResults() {
       }
     } catch (error) {
       console.error('Search error:', error);
-      toast.error('Search failed', { description: 'Please try again later.' });
+      // Resilient fallback: if the ranking RPC is unavailable we still return
+      // results from a plain table read instead of showing a dead page.
+      try {
+        const term = query.trim();
+        let q = supabase
+          .from('videos')
+          .select('id,title,description,thumb_url,duration_seconds,views_count,likes_count,comments_count,created_at,owner_id,category,tags,is_short')
+          .eq('visibility', 'public')
+          .eq('status', 'ready')
+          .or(`title.ilike.%${term}%,description.ilike.%${term}%`)
+          .order('views_count', { ascending: false, nullsFirst: false })
+          .range(newOffset, newOffset + 19);
+        if (filters.category && filters.category !== 'All') q = q.eq('category', filters.category);
+        const { data: rows } = await q;
+        const mapped = ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
+          ...r,
+          result_type: 'video',
+          display_name: null,
+          handle: null,
+          avatar_url: null,
+          followers_count: null,
+          videos_count: null,
+          rank: 0,
+        })) as unknown as SearchResult[];
+        if (newOffset === 0) setResults(mapped); else setResults((prev) => [...prev, ...mapped]);
+        setHasMore(mapped.length >= 20);
+        setOffset(newOffset + mapped.length);
+      } catch {
+        if (newOffset === 0) setResults([]);
+        setHasMore(false);
+        toast.error('Search failed', { description: 'Please try again later.' });
+      }
     } finally {
       setLoading(false);
     }
@@ -310,7 +341,7 @@ export default function SearchResults() {
               setFilters({ category: undefined, uploadDate: undefined, duration: undefined, type: undefined, sort: 'relevance' });
               navigate({
                 to: '/search',
-                search: { q: query },
+                search: { q: query, category: undefined, uploadDate: undefined, duration: undefined, type: undefined, sort: undefined },
               });
             }}
           >
@@ -357,7 +388,8 @@ export default function SearchResults() {
             {channels.map((channel) => (
               <Link
                 key={channel.id}
-                to={`/channel/${channel.handle || channel.id}`}
+                to={`/channel/$handle`}
+                params={{ handle: channel.handle || channel.id }}
                 className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition"
               >
                 <Avatar className="w-12 h-12">

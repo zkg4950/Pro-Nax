@@ -2,11 +2,11 @@
 import { useState } from 'react';
 import { lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
-import { Loader2, LayoutDashboard, Video, Activity, Eye, ShieldAlert, Flag, Gavel, ShieldCheck, Wallet, Megaphone, Cpu, Users, Tag as TagIcon, Settings as SettingsIcon, Sliders, KeyRound, ScrollText, Gauge, AlertTriangle } from 'lucide-react';
+import { Loader2, LayoutDashboard, Video, Activity, Eye, ShieldAlert, Flag, Gavel, ShieldCheck, Wallet, Megaphone, Cpu, Users, Tag as TagIcon, Settings as SettingsIcon, Sliders, KeyRound, ScrollText, Gauge, AlertTriangle, Database, Bot } from 'lucide-react';
 import { AdminShell, type AdminNavItem } from '@/components/admin/AdminShell';
 import { EngineBoundary } from '@/components/EngineBoundary';
 import { moderationQueue } from '@/lib/moderationQueue';
-import { useRouteContext } from '@tanstack/react-router';
+import { useAdminRole } from '@/hooks/useAdminRole';
 
 // Lazy load tab components
 const CommandCenterTab = lazy(() => import('@/components/admin/CommandCenter').then(m => ({ default: m.CommandCenterTab })));
@@ -32,6 +32,8 @@ const ModerationQueueTab = lazy(() => import('@/components/admin/tabs/Moderation
 const AuditTab = lazy(() => import('@/components/admin/tabs/AuditTab').then(m => ({ default: m.AuditTab })));
 const MonitorTab = lazy(() => import('@/components/admin/tabs/MonitorTab').then(m => ({ default: m.MonitorTab })));
 const VideosTab = lazy(() => import('@/components/admin/tabs/VideosTab').then(m => ({ default: m.VideosTab })));
+const DatabaseTablesTab = lazy(() => import('@/components/admin/tabs/DatabaseTablesTab').then(m => ({ default: m.DatabaseTablesTab })));
+const AdminChatTab = lazy(() => import('@/components/admin/AdminChat').then(m => ({ default: m.AdminChat })));
 
 function TabLoader() {
   return (
@@ -41,13 +43,12 @@ function TabLoader() {
   );
 }
 
-type Tab = 'preview' | 'command' | 'app' | 'categories' | 'algorithm' | 'realtime' | 'users' | 'videos' | 'copyright' | 'reports' | 'moderation' | 'appeals' | 'settings' | 'wallets' | 'withdrawals' | 'audit' | 'auditlogs' | 'ratelimits' | 'monitor' | 'ads' | 'admanager' | 'access' | 'strikes';
+type Tab = 'preview' | 'command' | 'app' | 'categories' | 'algorithm' | 'realtime' | 'users' | 'videos' | 'copyright' | 'reports' | 'moderation' | 'appeals' | 'settings' | 'wallets' | 'withdrawals' | 'audit' | 'auditlogs' | 'ratelimits' | 'monitor' | 'ads' | 'admanager' | 'access' | 'strikes' | 'database' | 'ai-chat';
 
 export default function Admin() {
   const [tab, setTab] = useState<Tab>('command');
-  // Admin permissions will be checked inside individual tabs
-  const isAdmin = true; // Default to true for now, will be overridden by auth checks
-  const isModerator = false; // Default to false for now
+  // Real role state from the authenticated session (server-validated via RPC).
+  const { isAdmin, isModerator, loading: rolesLoading } = useAdminRole();
 
   // Boot the moderation worker as soon as admin lands, so any queue persisted
   // from a previous session drains in the background.
@@ -75,25 +76,28 @@ export default function Admin() {
     { id: 'categories', label: 'Categories & Tags', icon: TagIcon, group: 'Studio Settings & Control' },
     { id: 'app', label: 'App Controls', icon: SettingsIcon, group: 'Studio Settings & Control' },
     { id: 'settings', label: 'Automated Moderation Rules', icon: Sliders, group: 'Studio Settings & Control' },
+    { id: 'ai-chat', label: 'AI Admin Brain', icon: Bot, group: 'AI & Automation' },
     { id: 'access', label: 'Admin Access & Team', icon: KeyRound, group: 'System & Security' },
     { id: 'monitor', label: 'System Health Monitor', icon: Activity, group: 'System & Security' },
     { id: 'audit', label: 'Admin Action Log', icon: ScrollText, group: 'System & Security' },
     { id: 'auditlogs', label: 'Application Audit Trail', icon: ScrollText, group: 'System & Security' },
     { id: 'ratelimits', label: 'Rate Limits & IP Rules', icon: Gauge, group: 'System & Security' },
+    { id: 'database', label: 'Database Tables', icon: Database, group: 'System & Security' },
     { id: 'strikes', label: 'Strike Management', icon: AlertTriangle, group: 'Rights & Moderation' },
   ];
 
   // Filter nav items based on role
   // Moderators can action reports/claims/bans but NOT wallets, payouts, roles or app settings
+  const moderatorAllowed = ['reports', 'moderation', 'appeals', 'strikes', 'users', 'videos', 'copyright', 'realtime', 'preview', 'command'];
   const navItems = allNavItems.filter(item => {
     if (isAdmin) return true; // Admins see everything
-    if (isModerator) {
-      // Moderators can see: reports, moderation, appeals, strikes, users (for banning), videos, copyright
-      const moderatorAllowed = ['reports', 'moderation', 'appeals', 'strikes', 'users', 'videos', 'copyright', 'realtime', 'preview', 'command'];
-      return moderatorAllowed.includes(item.id);
-    }
-    return true; // Support role or fallback
+    if (isModerator) return moderatorAllowed.includes(item.id);
+    return ['command', 'preview'].includes(item.id); // support / fallback
   });
+
+  if (rolesLoading) return <TabLoader />;
+
+
 
   return (
     <AdminShell
@@ -127,7 +131,9 @@ export default function Admin() {
           {tab === 'auditlogs' && isAdmin && <EngineBoundary name="audit-logs"><AuditLogsTab /></EngineBoundary>}
           {tab === 'ratelimits' && isAdmin && <EngineBoundary name="rate-limits"><RateLimitTab /></EngineBoundary>}
           {tab === 'access' && isAdmin && <EngineBoundary name="admin-access"><AdminAccessTab /></EngineBoundary>}
+          {tab === 'database' && isAdmin && <EngineBoundary name="database-tables"><DatabaseTablesTab /></EngineBoundary>}
           {tab === 'monitor' && isAdmin && <MonitorTab />}
+          {tab === 'ai-chat' && isAdmin && <AdminChatTab />}
         </motion.div>
       </Suspense>
     </AdminShell>

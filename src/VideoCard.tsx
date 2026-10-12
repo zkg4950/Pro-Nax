@@ -81,7 +81,7 @@ export function VideoCard({
     );
   }
 
-  /* ---------------- GRID LAYOUT (Authentic YouTube Mobile Style) ---------------- */
+  /* ---------------- GRID LAYOUT (Authentic ProNax Mobile Style) ---------------- */
   return (
     <div
       onClick={handleClick}
@@ -141,7 +141,7 @@ export function VideoCard({
           </div>
         </div>
 
-        {/* YouTube Style 3-Dots Menu Button */}
+        {/* ProNax Style 3-Dots Menu Button */}
         <button
           onClick={(e) => {
             e.stopPropagation();

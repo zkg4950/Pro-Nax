@@ -81,11 +81,11 @@ export default function Trending() {
       
       // Call the trending function
       const { data: trendingData, error } = await supabase.rpc('get_trending_videos', {
-        p_category: categoryParam,
-        p_region: null,
+        p_category: categoryParam ?? undefined,
+        p_region: undefined,
         p_window: windowMap[timeWindow],
         p_limit: 50,
-        p_cursor: null
+        p_cursor: undefined
       });
 
       if (error) throw error;
@@ -269,18 +269,16 @@ export default function Trending() {
                   </div>
                   
                   {/* Rank Change Indicator */}
-                  {video.rank_change !== 0 && (
+                  {(video.rank_change ?? 0) !== 0 && (
                     <div className={`absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold ${
-                      video.rank_change > 0 
-                        ? 'bg-green-500 text-white' 
-                        : 'bg-red-500 text-white'
+                      (video.rank_change ?? 0) > 0 ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
                     }`}>
-                      {video.rank_change > 0 ? (
+                      {(video.rank_change ?? 0) > 0 ? (
                         <ArrowUp className="w-3 h-3" />
                       ) : (
                         <ArrowDown className="w-3 h-3" />
                       )}
-                      {Math.abs(video.rank_change)}
+                      {Math.abs(video.rank_change ?? 0)}
                     </div>
                   )}
                   

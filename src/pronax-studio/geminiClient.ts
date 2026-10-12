@@ -196,7 +196,7 @@ export async function callAIStudio(payload: { model?: string; task: string; data
     content_quality_analysis: 'analyze-content-quality',
     advanced_moderation: 'analyze-content-moderation',
     copyright_analysis: 'detect-copyright',
-    creator_growth: 'creator-growth',
+    creator_growth: 'creator-coach',
     predictive_analytics: 'predictive-analytics',
   };
   const action = taskMap[payload.task] || payload.task;
@@ -262,7 +262,7 @@ export async function aiCopyrightDetection(videoFile: any, metadata?: any) {
 export async function aiCreatorGrowthAdvice(channelId: string) {
   return callAIStudio({
     model: 'gemini-2.5-flash',
-    task: 'creator_growth',
+    task: 'creator_coach',
     data: { channelId, analysisScope: 'comprehensive' },
   });
 }
@@ -275,6 +275,47 @@ export async function aiPredictiveAnalytics(videoId: string) {
   });
 }
 
+// Type exports for type compatibility
+export interface AlgorithmWeightsResult {
+  optimizedWeights: Record<string, number>;
+  expectedPerformanceLiftPct?: number;
+  reasoning?: string;
+  focusRecommendation?: string;
+}
 
+export interface ContentQualityResult {
+  qualityScores: {
+    overall: number;
+    resolutionScore: number;
+    audioClarity: number;
+    pacingScore: number;
+  };
+  aestheticQualityScore?: number;
+  contentSummary?: string;
+}
 
+export async function evaluateCopyrightDisputeWithAI(claimData: any) {
+  try {
+    const res = await geminiFetch('evaluate-copyright-dispute', {
+      method: 'POST',
+      body: JSON.stringify(claimData),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn('AI copyright dispute evaluation failed, using fallback:', err);
+    return {
+      isFairUse: false,
+      confidence: 0.5,
+      reasoning: 'AI evaluation unavailable - manual review required',
+      recommendedAction: 'manual_review',
+    };
+  }
+}
+
+export function isCompleteCopyrightEvaluation(result: any): boolean {
+  return result && typeof result.isFairUse === 'boolean' && typeof result.confidence === 'number';
+}
+
+export const AI_UNAVAILABLE = 'AI_UNAVAILABLE';
 

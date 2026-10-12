@@ -7,7 +7,7 @@ interface ShareButtonProps {
   text?: string;
   url?: string;
   className?: string;
-  variant?: 'default' | 'tiktok';
+  variant?: 'default' | 'pronax';
   shareCount?: number;
   onShareClick?: () => void;
   formatCount?: (n: number) => string;
@@ -74,7 +74,7 @@ export default function ShareButton({ title, text, url, className, variant = 'de
     return String(n);
   };
 
-  if (variant === 'tiktok') {
+  if (variant === 'pronax') {
     const countFormatter = formatCount || defaultFormatCount;
 
     return (

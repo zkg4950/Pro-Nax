@@ -121,7 +121,7 @@ export function getChunkData(file: File, chunk: UploadChunk): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const slice = file.slice(chunk.offset, chunk.offset + chunk.size);
     const reader = new FileReader();
-    reader.onload = () => resolve(new Blob([reader.result]));
+    reader.onload = () => resolve(new Blob([reader.result as ArrayBuffer]));
     reader.onerror = reject;
     reader.readAsArrayBuffer(slice);
   });

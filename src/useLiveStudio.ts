@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/loose";
 import { useAuthSession } from "@/hooks/useAuthSession";
-import type { ChannelStats, Comment, Video } from "./types";
+import type { ChannelStats, Comment, Video } from "@/pronax-studio/types";
 
 // Singleton channel management
 const channelMap = new Map<string, ReturnType<typeof supabase.channel>>();

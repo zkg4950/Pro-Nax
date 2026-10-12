@@ -11,7 +11,7 @@ import { useAuthSession } from '@/hooks/useAuthSession';
 
 export default function Appeal() {
   const navigate = useNavigate();
-  const { user, loading } = useAuthSession();
+  const { user, loading, signOut } = useAuthSession();
   const [profile, setProfile] = useState<any>(null);
   const [existing, setExisting] = useState<any>(null);
   const [message, setMessage] = useState('');
@@ -51,8 +51,8 @@ export default function Appeal() {
     setMessage('');
   };
 
-  const signOut = async () => {
-    try { await supabase.auth.signOut(); } catch { /* noop */ }
+  const handleSignOut = async () => {
+    await signOut();
     navigate('/auth', { replace: true });
   };
 
@@ -169,7 +169,7 @@ export default function Appeal() {
             </>
           )}
 
-          <button onClick={signOut} className="w-full mt-3 glass border border-border/40 px-4 py-2 rounded-xl text-xs text-muted-foreground hover:border-destructive/40 inline-flex items-center justify-center gap-2">
+          <button onClick={handleSignOut} className="w-full mt-3 glass border border-border/40 px-4 py-2 rounded-xl text-xs text-muted-foreground hover:border-destructive/40 inline-flex items-center justify-center gap-2">
             <LogOut className="w-3.5 h-3.5" /> Sign out
           </button>
         </div>

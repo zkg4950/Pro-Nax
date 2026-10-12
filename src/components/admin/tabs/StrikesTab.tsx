@@ -57,7 +57,7 @@ export function StrikesTab() {
         .order('created_at', { ascending: false });
 
       if (filterSeverity !== 'all') {
-        query = query.eq('severity', filterSeverity);
+        query = query.eq('severity', filterSeverity as never);
       }
 
       if (filterCategory !== 'all') {
@@ -67,7 +67,7 @@ export function StrikesTab() {
       const { data, error } = await query.limit(100);
 
       if (error) throw error;
-      setStrikes(data || []);
+      setStrikes((data || []) as unknown as Strike[]);
     } catch (error) {
       console.error('Error loading strikes:', error);
       toast.error('Failed to load strikes');
@@ -87,10 +87,7 @@ export function StrikesTab() {
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      // Get current strike count
+      // Get current strike count to determine severity
       const { data: existingStrikes } = await supabase
         .from('user_strikes')
         .select('id')
@@ -98,57 +95,39 @@ export function StrikesTab() {
         .gte('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString());
 
       const strikeCount = existingStrikes?.length || 0;
-      let severity: 'warning' | 'strike1' | 'strike2' | 'strike3' = 'strike1';
+      let severity: 1 | 2 | 3 = 1;
       
-      if (strikeCount === 0) severity = 'strike1';
-      else if (strikeCount === 1) severity = 'strike2';
-      else severity = 'strike3';
+      if (strikeCount === 0) severity = 1;
+      else if (strikeCount === 1) severity = 2;
+      else severity = 3;
 
-      // Calculate expiration
-      let expiresAt: string | undefined;
-      if (severity === 'strike1') {
-        const expiry = new Date();
-        expiry.setDate(expiry.getDate() + 90);
-        expiresAt = expiry.toISOString();
-      } else if (severity === 'strike2') {
-        const expiry = new Date();
-        expiry.setDate(expiry.getDate() + 180);
-        expiresAt = expiry.toISOString();
-      }
-
-      const { error } = await supabase.from('user_strikes').insert({
-        user_id: newStrike.userId,
-        reason: newStrike.reason,
-        severity,
-        category: newStrike.category,
-        video_id: newStrike.videoId || null,
-        expires_at: expiresAt,
-        acknowledged: false,
+      // Issue strike using admin RPC
+      const { error } = await supabase.rpc('admin_issue_strike', {
+        p_user: newStrike.userId,
+        p_reason: newStrike.reason,
+        p_category: newStrike.category,
+        p_severity: severity,
+        p_source: 'manual',
+        p_video_id: newStrike.videoId || null
       });
 
       if (error) throw error;
 
-      // Apply consequences
-      if (severity === 'strike2') {
+      // Apply consequences using admin RPC
+      if (severity === 2) {
         const suspensionEnd = new Date();
         suspensionEnd.setDate(suspensionEnd.getDate() + 7);
-        await supabase
-          .from('profiles')
-          .update({
-            is_banned: true,
-            ban_reason: `Account suspended: ${newStrike.reason}`,
-            banned_until: suspensionEnd.toISOString(),
-          })
-          .eq('id', newStrike.userId);
-      } else if (severity === 'strike3') {
-        await supabase
-          .from('profiles')
-          .update({
-            is_banned: true,
-            ban_reason: `Account permanently banned: ${newStrike.reason}`,
-            banned_until: null,
-          })
-          .eq('id', newStrike.userId);
+        await supabase.rpc('admin_ban_user', {
+          p_user: newStrike.userId,
+          p_reason: `Account suspended: ${newStrike.reason}`,
+          p_until: suspensionEnd.toISOString()
+        });
+      } else if (severity === 3) {
+        await supabase.rpc('admin_ban_user', {
+          p_user: newStrike.userId,
+          p_reason: `Account permanently banned: ${newStrike.reason}`,
+          p_until: null
+        });
       }
 
       toast.success(`Strike added successfully (Severity: ${severity})`);
@@ -180,6 +159,26 @@ export function StrikesTab() {
       case 'strike2': return 'bg-red-500/20 text-red-400 border-red-500/30';
       case 'strike3': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
       default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+    }
+  };
+
+  const handleRevokeStrike = async (strikeId: string) => {
+    const reason = prompt('Reason for revoking this strike:');
+    if (!reason) return;
+
+    try {
+      const { error } = await supabase.rpc('admin_revoke_strike', {
+        p_strike_id: strikeId,
+        p_reason: reason
+      });
+
+      if (error) throw error;
+
+      toast.success('Strike revoked successfully');
+      loadStrikes();
+    } catch (error) {
+      console.error('Error revoking strike:', error);
+      toast.error('Failed to revoke strike');
     }
   };
 
@@ -337,6 +336,12 @@ export function StrikesTab() {
                   ) : (
                     <span className="text-xs text-yellow-400">Pending</span>
                   )}
+                  <button
+                    onClick={() => handleRevokeStrike(strike.id)}
+                    className="text-xs px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition"
+                  >
+                    Revoke
+                  </button>
                 </div>
               </div>
             </div>

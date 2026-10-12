@@ -214,19 +214,17 @@ export function VideoGrid({ videos, empty }: { videos: GridVideo[]; empty?: stri
 export async function enrichVideos(supabase: any, videos: any[]): Promise<GridVideo[]> {
   if (!videos.length) return [];
   const ownerIds = [...new Set(videos.map(v => v.owner_id).filter(Boolean))];
-  const ids = videos.map(v => v.id);
-  const [{ data: profiles }, views] = await Promise.all([
-    ownerIds.length ? supabase.from('profiles').select('id, display_name, avatar_url').in('id', ownerIds) : Promise.resolve({ data: [] }),
-    supabase.from('video_views').select('video_id').in('video_id', ids),
-  ]);
+  // Counters are read from the denormalized columns on the video row — never
+  // by pulling raw event rows, which would be unbounded on popular videos.
+  const { data: profiles } = ownerIds.length
+    ? await supabase.from('profiles').select('id, display_name, avatar_url').in('id', ownerIds)
+    : { data: [] };
   const nameMap = new Map((profiles ?? []).map((p: any) => [p.id, p.display_name || 'Creator']));
   const avatarMap = new Map((profiles ?? []).map((p: any) => [p.id, p.avatar_url]));
-  const viewMap = new Map<string, number>();
-  (views.data ?? []).forEach((r: any) => viewMap.set(r.video_id, (viewMap.get(r.video_id) ?? 0) + 1));
   return videos.map(v => ({
     ...v,
     ownerName: nameMap.get(v.owner_id) ?? 'Creator',
     ownerAvatar: avatarMap.get(v.owner_id),
-    views: viewMap.get(v.id) ?? Number(v.views_count ?? v.views ?? 0),
+    views: Number(v.views_count ?? v.views ?? 0),
   }));
 }
