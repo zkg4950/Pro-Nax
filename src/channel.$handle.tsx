@@ -1,4 +1,3 @@
-/* Copyright (c) 2026 ProNax. All rights reserved. Proprietary and Confidential. Unauthorized copying or redistribution is strictly prohibited. */
 import { createFileRoute } from "@tanstack/react-router";
 import Channel from "@/features/pages/Channel";
 
@@ -7,7 +6,7 @@ export const Route = createFileRoute("/channel/$handle")({
     const handle = (params.handle ?? "").replace(/^@/, "");
     const title = `@${handle} — ProNax Channel`;
     const description = `Watch videos, shorts, live streams and playlists from @${handle} on ProNax.`;
-    const url = `https://pronax.lovable.app/channel/${handle}`;
+    const url = `https://github.com/zkg4950/Pro-Nax/channel/${handle}`;
     return {
       meta: [
         { title },
