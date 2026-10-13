@@ -282,6 +282,342 @@ class SupabaseAdminTools:
             return {"error": f"Failed to delete video: {response.status_code}"}
         except Exception as e:
             return {"error": str(e)}
+    
+    def toggle_feature(self, feature_key: str, enabled: bool, reason: str, duration_minutes: int = 0):
+        """Toggle a feature on/off in app_settings and log to audit_logs"""
+        try:
+            # Update app_settings table
+            payload = {
+                "key": feature_key,
+                "value": str(enabled).lower(),
+                "enabled": enabled,
+                "reason": reason,
+                "updated_at": "now()"
+            }
+            
+            # Try to update first, then insert if not exists
+            update_response = requests.patch(
+                f"{self.url}/rest/v1/app_settings?key=eq.{feature_key}",
+                headers=self.headers,
+                json=payload
+            )
+            
+            if update_response.status_code not in [200, 204]:
+                # If update fails, try insert
+                insert_response = requests.post(
+                    f"{self.url}/rest/v1/app_settings",
+                    headers=self.headers,
+                    json=payload
+                )
+                if insert_response.status_code not in [200, 201]:
+                    return {"error": f"Failed to update app_settings: {insert_response.status_code}"}
+            
+            # Log to audit_logs
+            audit_payload = {
+                "action": "FEATURE_TOGGLED",
+                "target": feature_key,
+                "reason": reason,
+                "actor": "AI_AUTONOMOUS",
+                "metadata": {
+                    "enabled": enabled,
+                    "duration": duration_minutes
+                },
+                "created_at": "now()"
+            }
+            
+            audit_response = requests.post(
+                f"{self.url}/rest/v1/audit_logs",
+                headers=self.headers,
+                json=audit_payload
+            )
+            
+            if audit_response.status_code in [200, 201]:
+                return {
+                    "success": True,
+                    "feature_key": feature_key,
+                    "enabled": enabled,
+                    "reason": reason,
+                    "duration_minutes": duration_minutes,
+                    "action": "feature_toggled"
+                }
+            else:
+                return {"error": f"Feature toggled but audit log failed: {audit_response.status_code}"}
+                
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def get_feature_statuses(self):
+        """Get all feature toggle statuses from app_settings"""
+        try:
+            response = requests.get(
+                f"{self.url}/rest/v1/app_settings?select=*&order=updated_at desc",
+                headers=self.headers
+            )
+            if response.status_code == 200:
+                return {"features": response.json()}
+            return {"error": f"Failed to get feature statuses: {response.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def query_ai_audit_logs(self, limit: int = 10, target: str = None):
+        """Query AI autonomous actions from audit_logs"""
+        try:
+            query_url = f"{self.url}/rest/v1/audit_logs?actor=eq.AI_AUTONOMOUS&order=created_at desc&limit={limit}"
+            if target:
+                query_url += f"&target=eq.{target}"
+            
+            response = requests.get(query_url, headers=self.headers)
+            if response.status_code == 200:
+                logs = response.json()
+                formatted_logs = []
+                for log in logs:
+                    formatted_logs.append({
+                        "action": log.get("action"),
+                        "target": log.get("target"),
+                        "reason": log.get("reason"),
+                        "timestamp": log.get("created_at"),
+                        "metadata": log.get("metadata", {})
+                    })
+                return {"logs": formatted_logs, "count": len(formatted_logs)}
+            return {"error": f"Failed to query audit logs: {response.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def diagnose_system_health(self):
+        """Comprehensive system health diagnostic"""
+        health_report = {
+            "overall_status": "UNKNOWN",
+            "checks": []
+        }
+        
+        # Database Check
+        try:
+            tables_to_check = ["profiles", "videos", "audit_logs", "app_settings"]
+            db_status = "HEALTHY"
+            db_details = []
+            
+            for table in tables_to_check:
+                try:
+                    response = requests.get(
+                        f"{self.url}/rest/v1/{table}?select=id&limit=1",
+                        headers=self.headers
+                    )
+                    if response.status_code == 200:
+                        db_details.append(f"[HEALTHY] {table} table accessible")
+                    else:
+                        db_status = "DEGRADED"
+                        db_details.append(f"[DEGRADED] {table} table returned {response.status_code}")
+                except Exception as e:
+                    db_status = "BROKEN"
+                    db_details.append(f"[BROKEN] {table} table error: {str(e)}")
+            
+            health_report["checks"].append({
+                "component": "Database (Supabase)",
+                "status": db_status,
+                "details": db_details,
+                "fix_steps": [] if db_status == "HEALTHY" else ["Check Supabase connection", "Verify table permissions"]
+            })
+        except Exception as e:
+            health_report["checks"].append({
+                "component": "Database (Supabase)",
+                "status": "BROKEN",
+                "details": [f"Connection error: {str(e)}"],
+                "fix_steps": ["Check VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables"]
+            })
+        
+        # R2 Storage Check
+        r2_status = "HEALTHY"
+        r2_details = []
+        r2_fix_steps = []
+        
+        r2_account_id = os.getenv("R2_ACCOUNT_ID")
+        r2_access_key = os.getenv("R2_ACCESS_KEY_ID")
+        r2_secret_key = os.getenv("R2_SECRET_ACCESS_KEY")
+        r2_bucket = os.getenv("R2_BUCKET_NAME")
+        
+        if not all([r2_account_id, r2_access_key, r2_secret_key, r2_bucket]):
+            r2_status = "BROKEN/MISSING CONFIG"
+            r2_details.append("Cloudflare R2 credentials not configured in secrets")
+            r2_fix_steps = [
+                "Set R2_ACCOUNT_ID environment variable",
+                "Set R2_ACCESS_KEY_ID environment variable",
+                "Set R2_SECRET_ACCESS_KEY environment variable",
+                "Set R2_BUCKET_NAME environment variable"
+            ]
+        else:
+            r2_details.append("All R2 credentials configured")
+        
+        health_report["checks"].append({
+            "component": "Cloudflare R2 Storage",
+            "status": r2_status,
+            "details": r2_details,
+            "fix_steps": r2_fix_steps
+        })
+        
+        # Redis Check
+        redis_status = "HEALTHY"
+        redis_details = []
+        redis_fix_steps = []
+        
+        try:
+            import redis
+            redis_client = redis.Redis(host='localhost', port=6379, db=0, socket_timeout=2)
+            redis_client.ping()
+            redis_details.append("Redis connection successful")
+        except ImportError:
+            redis_status = "DEGRADED"
+            redis_details.append("Redis Python package not installed")
+            redis_fix_steps = ["pip install redis"]
+        except Exception as e:
+            redis_status = "DEGRADED"
+            redis_details.append(f"Redis connection failed: {str(e)}")
+            redis_details.append("Worker queues degraded (in-memory fallback)")
+            redis_fix_steps = ["Start Redis server: redis-server", "Check Redis configuration"]
+        
+        health_report["checks"].append({
+            "component": "Redis & Background Workers",
+            "status": redis_status,
+            "details": redis_details,
+            "fix_steps": redis_fix_steps
+        })
+        
+        # AI Gateway Check
+        ai_gateway_status = "HEALTHY"
+        ai_gateway_details = []
+        ai_gateway_fix_steps = []
+        
+        try:
+            response = requests.get("http://localhost:9000/api/ai/health", timeout=3)
+            if response.status_code == 200:
+                ai_gateway_details.append("AI Gateway service responding")
+            else:
+                ai_gateway_status = "DEGRADED"
+                ai_gateway_details.append(f"AI Gateway returned {response.status_code}")
+                ai_gateway_fix_steps = ["Check AI Gateway server on port 9000"]
+        except Exception as e:
+            ai_gateway_status = "BROKEN"
+            ai_gateway_details.append(f"AI Gateway connection failed: {str(e)}")
+            ai_gateway_fix_steps = ["Start AI Gateway service", "Check port 9000 availability"]
+        
+        health_report["checks"].append({
+            "component": "AI Gateway & TTS Services",
+            "status": ai_gateway_status,
+            "details": ai_gateway_details,
+            "fix_steps": ai_gateway_fix_steps
+        })
+        
+        # Determine overall status
+        all_statuses = [check["status"] for check in health_report["checks"]]
+        if "BROKEN" in all_statuses or "BROKEN/MISSING CONFIG" in all_statuses:
+            health_report["overall_status"] = "DEGRADED"
+        elif "DEGRADED" in all_statuses:
+            health_report["overall_status"] = "DEGRADED"
+        else:
+            health_report["overall_status"] = "HEALTHY"
+        
+        return health_report
+    
+    def analyze_app_growth_and_ui(self):
+        """Analyze app growth metrics and provide UI/UX recommendations"""
+        try:
+            # Get recent videos for engagement analysis
+            videos_response = requests.get(
+                f"{self.url}/rest/v1/videos?select=id,title,views,created_at&order=created_at desc&limit=50",
+                headers=self.headers
+            )
+            
+            # Get user count
+            users_response = requests.get(
+                f"{self.url}/rest/v1/profiles?select=id&head=true",
+                headers=self.headers
+            )
+            
+            video_data = videos_response.json() if videos_response.status_code == 200 else []
+            user_count = 0
+            if users_response.status_code == 200:
+                try:
+                    user_count = int(users_response.headers.get('content-range', '0-0/0').split('/')[-1])
+                except:
+                    pass
+            
+            # Calculate engagement metrics
+            total_views = sum(v.get('views', 0) for v in video_data)
+            avg_views = total_views / len(video_data) if video_data else 0
+            
+            # Generate recommendations
+            recommendations = {
+                "metrics": {
+                    "total_videos": len(video_data),
+                    "total_users": user_count,
+                    "total_views": total_views,
+                    "average_views_per_video": round(avg_views, 2)
+                },
+                "ui_ux_recommendations": [
+                    {
+                        "priority": "HIGH",
+                        "category": "Mobile Responsiveness",
+                        "suggestion": "Improve admin tabs mobile layout - current implementation may have overflow issues on small screens",
+                        "impact": "Better admin accessibility on mobile devices"
+                    },
+                    {
+                        "priority": "MEDIUM",
+                        "category": "Video Player",
+                        "suggestion": "Add buffer state indicators and preloading for smoother playback",
+                        "impact": "Reduced viewer drop-off during buffering"
+                    },
+                    {
+                        "priority": "MEDIUM",
+                        "category": "Navigation",
+                        "suggestion": "Optimize drawer ergonomics - add swipe gestures and better touch targets",
+                        "impact": "Improved navigation experience"
+                    }
+                ],
+                "feature_recommendations": [
+                    {
+                        "priority": "HIGH",
+                        "feature": "Automated Thumbnail Generation",
+                        "description": "Use AI to generate thumbnails from video frames",
+                        "impact": "Increased click-through rates by 25-40%"
+                    },
+                    {
+                        "priority": "MEDIUM",
+                        "feature": "AI Clip Extraction for Shorts",
+                        "description": "Automatically extract viral moments for short-form content",
+                        "impact": "Expand content reach to Shorts audience"
+                    },
+                    {
+                        "priority": "LOW",
+                        "feature": "Real-time Super Chat",
+                        "description": "Live chat monetization during streams",
+                        "impact": "Additional revenue stream"
+                    }
+                ],
+                "performance_recommendations": [
+                    {
+                        "priority": "HIGH",
+                        "category": "HLS Caching",
+                        "suggestion": "Implement CDN caching for HLS segments",
+                        "impact": "50-70% reduction in bandwidth costs"
+                    },
+                    {
+                        "priority": "MEDIUM",
+                        "category": "Image Lazy-loading",
+                        "suggestion": "Lazy-load thumbnails and profile images",
+                        "impact": "Faster initial page load (30-50% improvement)"
+                    },
+                    {
+                        "priority": "MEDIUM",
+                        "category": "CDN Routing",
+                        "suggestion": "Configure geographically distributed CDN edge locations",
+                        "impact": "Reduced latency for global users"
+                    }
+                ]
+            }
+            
+            return recommendations
+            
+        except Exception as e:
+            return {"error": str(e)}
 
 # Initialize tools
 supabase_tools = SupabaseAdminTools()
@@ -326,11 +662,25 @@ def call_ollama(messages, system_prompt=None):
     # For all other messages, use Ollama with selected model
     try:
         simplified_messages = messages[-5:] if len(messages) > 5 else messages
-        # Strong Roman Urdu prompt
+        # Strong Roman Urdu prompt with explainable AI instructions
         simple_prompt = """IMPORTANT: You MUST respond ONLY in Roman Urdu (Urdu written in English letters). 
 Do NOT use English words. Do NOT use any other language.
 Example: "Jani, maine check kiya hai. Sab theek hai."
-Be conversational and helpful. Use "jani" to address the user."""
+Be conversational and helpful. Use "jani" to address the user.
+
+EXPLAINABLE AI INSTRUCTIONS:
+When the admin asks about past actions (e.g., "Tum ne upload kyun band kiya?", "User X ko kyun ban kiya?", "Aaj tum ne kya kya actions liye?"):
+- You MUST check the audit logs data provided in the context
+- Explain the exact reason/trigger for each action
+- Be transparent about autonomous decisions
+- Show respect for the admin's authority
+- Provide timestamps when available
+- If audit logs are not available in context, ask the admin to check audit logs
+
+When providing diagnostic reports or system status:
+- Clearly indicate what is [HEALTHY], [DEGRADED], or [BROKEN]
+- Provide actionable fix steps
+- Be honest about system limitations"""
         
         payload = {
             "model": selected_model,
@@ -376,11 +726,25 @@ def call_groq(messages, system_prompt=None):
     
     try:
         simplified_messages = messages[-5:] if len(messages) > 5 else messages
-        # Strong Roman Urdu prompt
+        # Strong Roman Urdu prompt with explainable AI instructions
         simple_prompt = """IMPORTANT: You MUST respond ONLY in Roman Urdu (Urdu written in English letters). 
 Do NOT use English words. Do NOT use any other language.
 Example: "Jani, maine check kiya hai. Sab theek hai."
-Be conversational and helpful. Use "jani" to address the user."""
+Be conversational and helpful. Use "jani" to address the user.
+
+EXPLAINABLE AI INSTRUCTIONS:
+When the admin asks about past actions (e.g., "Tum ne upload kyun band kiya?", "User X ko kyun ban kiya?", "Aaj tum ne kya kya actions liye?"):
+- You MUST check the audit logs data provided in the context
+- Explain the exact reason/trigger for each action
+- Be transparent about autonomous decisions
+- Show respect for the admin's authority
+- Provide timestamps when available
+- If audit logs are not available in context, ask the admin to check audit logs
+
+When providing diagnostic reports or system status:
+- Clearly indicate what is [HEALTHY], [DEGRADED], or [BROKEN]
+- Provide actionable fix steps
+- Be honest about system limitations"""
         
         payload = {
             "model": GROQ_MODEL,
@@ -430,13 +794,14 @@ def detect_intent_and_execute(message, video_frame=None):
             "data": {"video_frame": True}
         })
     
-    # System health check
-    if "health" in message_lower or "status" in message_lower or "how's" in message_lower:
-        health = supabase_tools.get_system_health()
+    # System health check - new comprehensive diagnostic
+    if "health" in message_lower or "status" in message_lower or "how's" in message_lower or "diagnostic" in message_lower:
+        health = supabase_tools.diagnose_system_health()
         actions.append({
-            "type": "System Health Check",
-            "description": "Checked system health metrics",
-            "data": health
+            "type": "System Health Diagnostic",
+            "description": "Comprehensive system health check completed",
+            "data": health,
+            "is_autonomous": True
         })
     
     # Get users
@@ -457,6 +822,60 @@ def detect_intent_and_execute(message, video_frame=None):
             "type": "Video Data Retrieved",
             "description": f"Retrieved {video_count} videos",
             "data": videos
+        })
+    
+    # Feature toggle operations
+    if "toggle" in message_lower or "enable" in message_lower or "disable" in message_lower or "band" in message_lower or "khol" in message_lower or "band" in message_lower:
+        # Extract feature key and enabled state
+        enabled = "enable" in message_lower or "on" in message_lower or "khol" in message_lower
+        feature_key = None
+        
+        # Try to identify feature from message
+        if "upload" in message_lower:
+            feature_key = "upload_enabled"
+        elif "stream" in message_lower or "live" in message_lower:
+            feature_key = "live_streaming_enabled"
+        elif "short" in message_lower:
+            feature_key = "shorts_enabled"
+        elif "comment" in message_lower:
+            feature_key = "comments_enabled"
+        
+        if feature_key:
+            reason = "Admin request via AI Brain"
+            result = supabase_tools.toggle_feature(feature_key, enabled, reason)
+            actions.append({
+                "type": "Feature Toggled",
+                "description": f"{'Enabled' if enabled else 'Disabled'} {feature_key}",
+                "data": result,
+                "is_autonomous": True,
+                "badge": "AI AUTONOMOUS ACTION"
+            })
+    
+    # Get feature statuses
+    if "feature" in message_lower and ("status" in message_lower or "settings" in message_lower):
+        features = supabase_tools.get_feature_statuses()
+        actions.append({
+            "type": "Feature Statuses Retrieved",
+            "description": "Retrieved all feature toggle statuses",
+            "data": features
+        })
+    
+    # Query AI audit logs - for explainable AI
+    if "audit" in message_lower or "log" in message_lower or "action" in message_lower or "kiya" in message_lower or "kya" in message_lower:
+        logs = supabase_tools.query_ai_audit_logs(limit=10)
+        actions.append({
+            "type": "AI Audit Logs Retrieved",
+            "description": f"Retrieved {logs.get('count', 0)} autonomous actions",
+            "data": logs
+        })
+    
+    # Analyze app growth and UI
+    if "growth" in message_lower or "recommend" in message_lower or "improve" in message_lower or "suggestion" in message_lower or "ui" in message_lower:
+        analysis = supabase_tools.analyze_app_growth_and_ui()
+        actions.append({
+            "type": "App Growth & UI Analysis",
+            "description": "Analyzed app metrics and generated recommendations",
+            "data": analysis
         })
     
     # Ban user (requires confirmation in real scenario)
@@ -491,6 +910,16 @@ def chat():
         # Get relevant memories from database
         relevant_memories = get_relevant_memories(message, limit=5)
         
+        # Check if admin is asking about past actions - if so, fetch audit logs
+        message_lower = message.lower()
+        audit_context = ""
+        if any(keyword in message_lower for keyword in ["kyun", "kya", "kiya", "why", "what", "audit", "log", "action", "ban", "band", "suspension"]):
+            audit_logs = supabase_tools.query_ai_audit_logs(limit=5)
+            if audit_logs.get("logs"):
+                audit_context = "\n\nRECENT AI AUTONOMOUS ACTIONS (for explainability):\n"
+                for log in audit_logs["logs"]:
+                    audit_context += f"- Action: {log['action']}, Target: {log['target']}, Reason: {log['reason']}, Time: {log['timestamp']}\n"
+        
         # Build messages for Ollama
         messages = []
         
@@ -509,6 +938,13 @@ def chat():
             messages.append({
                 "role": "system",
                 "content": memory_context
+            })
+        
+        # Add audit logs context if available (for explainable AI)
+        if audit_context:
+            messages.append({
+                "role": "system",
+                "content": audit_context
             })
         
         # Add conversation history

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, AlertCircle, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, UserCircle } from 'lucide-react';
+import { Send, Bot, User, Loader2, AlertCircle, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, UserCircle, CheckCircle, XCircle, Activity } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -7,6 +7,11 @@ interface Message {
   content: string;
   timestamp: Date;
   isTyping?: boolean;
+  badge?: {
+    type: 'HEALTHY' | 'DEGRADED' | 'BROKEN' | 'AI_AUTONOMOUS' | 'OFFLINE' | 'ENABLED';
+    text: string;
+    tooltip?: string;
+  };
 }
 
 export function AdminChat() {
@@ -257,15 +262,57 @@ export function AdminChat() {
       // Speak the response with female voice
       speak(data.response);
 
-      // If there are actions taken, show them
+      // If there are actions taken, show them with badges
       if (data.actions && data.actions.length > 0) {
-        const actionMessage: Message = {
-          id: (Date.now() + 2).toString(),
-          role: 'assistant',
-          content: `\n\n**Actions Executed:**\n${data.actions.map((a: any) => `• ${a.type}: ${a.description}`).join('\n')}`,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, actionMessage]);
+        data.actions.forEach((action: any, index: number) => {
+          let badge: Message['badge'] | undefined;
+          
+          // Determine badge type based on action
+          if (action.is_autonomous) {
+            badge = {
+              type: 'AI_AUTONOMOUS',
+              text: 'AI AUTONOMOUS ACTION',
+              tooltip: action.description
+            };
+          } else if (action.type === 'System Health Diagnostic') {
+            const healthStatus = action.data?.overall_status || 'UNKNOWN';
+            if (healthStatus === 'HEALTHY') {
+              badge = {
+                type: 'HEALTHY',
+                text: 'HEALTHY',
+                tooltip: 'All systems operational'
+              };
+            } else if (healthStatus === 'DEGRADED') {
+              badge = {
+                type: 'DEGRADED',
+                text: 'DEGRADED',
+                tooltip: 'Some systems need attention'
+              };
+            } else {
+              badge = {
+                type: 'BROKEN',
+                text: 'BROKEN',
+                tooltip: 'Critical issues detected'
+              };
+            }
+          } else if (action.type === 'Feature Toggled') {
+            const enabled = action.data?.enabled;
+            badge = {
+              type: enabled ? 'ENABLED' : 'OFFLINE',
+              text: enabled ? 'ENABLED' : 'OFFLINE',
+              tooltip: action.description
+            };
+          }
+          
+          const actionMessage: Message = {
+            id: (Date.now() + 2 + index).toString(),
+            role: 'assistant',
+            content: `• ${action.type}: ${action.description}`,
+            timestamp: new Date(),
+            badge
+          };
+          setMessages(prev => [...prev, actionMessage]);
+        });
       }
 
     } catch (error) {
@@ -391,6 +438,27 @@ export function AdminChat() {
                   }`}>
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   </div>
+                  {message.badge && (
+                    <div
+                      className={`mt-2 px-2 py-1 rounded text-xs font-medium inline-flex items-center gap-1 ${
+                        message.badge.type === 'HEALTHY' || message.badge.type === 'ENABLED'
+                          ? 'bg-green-600 text-white'
+                          : message.badge.type === 'DEGRADED'
+                          ? 'bg-amber-500 text-white'
+                          : message.badge.type === 'AI_AUTONOMOUS'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-red-600 text-white'
+                      }`}
+                      title={message.badge.tooltip}
+                    >
+                      {message.badge.type === 'HEALTHY' && <CheckCircle className="w-3 h-3" />}
+                      {message.badge.type === 'DEGRADED' && <Activity className="w-3 h-3" />}
+                      {message.badge.type === 'BROKEN' || message.badge.type === 'OFFLINE' && <XCircle className="w-3 h-3" />}
+                      {message.badge.type === 'AI_AUTONOMOUS' && <Bot className="w-3 h-3" />}
+                      {message.badge.type === 'ENABLED' && <CheckCircle className="w-3 h-3" />}
+                      {message.badge.text}
+                    </div>
+                  )}
                   <span className="text-xs text-gray-500 mt-1">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>

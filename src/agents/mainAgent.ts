@@ -59,41 +59,54 @@ export async function callLocalLLM(prompt: string, context?: any): Promise<strin
     // OPTION 1: Ollama (Local LLM) - Default
     if (llmProvider === 'ollama') {
       console.log(`[callLocalLLM] Calling Ollama at ${ollamaBaseUrl} with model ${ollamaModel}`);
-      const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: ollamaModel,
-          prompt: prompt,
-          stream: false,
-          options: {
-            temperature: 0.7,
-            top_p: 0.9,
-          },
-        }),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
-      if (!response.ok) {
-        throw new Error(`Ollama returned ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const llmResponse = data.response;
-
-      console.log('[callLocalLLM] Ollama response received:', llmResponse.substring(0, 200) + '...');
-
-      // Try to parse as JSON, if it's already JSON
       try {
-        const parsed = JSON.parse(llmResponse);
-        return JSON.stringify(parsed);
-      } catch {
-        // If not JSON, wrap it in the expected format
-        return JSON.stringify({
-          advice: llmResponse,
-          suggestions: [],
-          actionItems: [],
-          estimatedImpact: 'AI-generated response',
+        const response = await fetch(`${ollamaBaseUrl}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: ollamaModel,
+            prompt: prompt,
+            stream: false,
+            options: {
+              temperature: 0.7,
+              top_p: 0.9,
+            },
+          }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`Ollama returned ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const llmResponse = data.response;
+
+        console.log('[callLocalLLM] Ollama response received:', llmResponse.substring(0, 200) + '...');
+
+        // Try to parse as JSON, if it's already JSON
+        try {
+          const parsed = JSON.parse(llmResponse);
+          return JSON.stringify(parsed);
+        } catch {
+          // If not JSON, wrap it in the expected format
+          return JSON.stringify({
+            advice: llmResponse,
+            suggestions: [],
+            actionItems: [],
+            estimatedImpact: 'AI-generated response',
+          });
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Ollama request timed out after 2 minutes');
+        }
+        throw fetchError;
       }
     }
 

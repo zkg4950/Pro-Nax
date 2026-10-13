@@ -343,6 +343,13 @@ def text_to_speech():
         # Fallback: Use Edge-TTS (Microsoft Neural TTS)
         try:
             import edge_tts
+            import edge_tts.constants
+
+            # Fix Microsoft 403 by pointing to current Edge synthesis endpoint
+            edge_tts.constants.WSS_URL = (
+                "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
+                f"?Ocp-Apim-Subscription-Key={edge_tts.constants.TRUSTED_CLIENT_TOKEN}"
+            )
             import asyncio
             
             # Map language and voice to Edge-TTS voices
