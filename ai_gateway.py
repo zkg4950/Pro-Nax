@@ -352,7 +352,7 @@ def text_to_speech():
             )
             import asyncio
             
-            # Map language and voice to Edge-TTS voices
+            # Map language and voice to Edge-TTS voices with Pakistani neural voices
             voice_map = {
                 'skr': 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural',
                 'ur': 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural',
@@ -363,7 +363,32 @@ def text_to_speech():
             
             edge_voice = voice_map.get(language, voice_map['en'])
             
-            communicate = edge_tts.Communicate(text, edge_voice)
+            # Create SSML for natural Pakistani cadence
+            # Add rate and pitch adjustments for more natural speech
+            if language in ['ur', 'skr']:
+                # For Urdu/Saraiki, use slightly slower rate for clarity
+                ssml_text = f"""
+                <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{language}-PK">
+                    <voice name="{edge_voice}">
+                        <prosody rate="-5%" pitch="+0Hz">
+                            {text}
+                        </prosody>
+                    </voice>
+                </speak>
+                """
+            else:
+                # For other languages, use standard settings
+                ssml_text = f"""
+                <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{language}">
+                    <voice name="{edge_voice}">
+                        <prosody rate="0%" pitch="+0Hz">
+                            {text}
+                        </prosody>
+                    </voice>
+                </speak>
+                """
+            
+            communicate = edge_tts.Communicate(ssml_text, edge_voice)
             
             # Generate audio synchronously using edge-tts save method
             import tempfile
@@ -410,13 +435,13 @@ def text_to_speech():
 
 if __name__ == '__main__':
     print("="*60)
-    print("🧠 ProNax Unified AI Gateway")
+    print("[AI GATEWAY] ProNax Unified AI Gateway")
     print("="*60)
-    print(f"📡 Ollama: {OLLAMA_BASE_URL}")
-    print(f"🤖 Model: {OLLAMA_MODEL} (fallback: {OLLAMA_FALLBACK_MODEL})")
-    print(f"🔗 LangGraph: http://localhost:{LANGGRAPH_PORT}")
-    print(f"🧠 Admin Brain: http://localhost:{ADMIN_BRAIN_PORT}")
-    print(f"🌐 Gateway: http://localhost:{AI_GATEWAY_PORT}")
+    print(f"[AI GATEWAY] Ollama: {OLLAMA_BASE_URL}")
+    print(f"[AI GATEWAY] Model: {OLLAMA_MODEL} (fallback: {OLLAMA_FALLBACK_MODEL})")
+    print(f"[AI GATEWAY] LangGraph: http://localhost:{LANGGRAPH_PORT}")
+    print(f"[AI GATEWAY] Admin Brain: http://localhost:{ADMIN_BRAIN_PORT}")
+    print(f"[AI GATEWAY] Gateway: http://localhost:{AI_GATEWAY_PORT}")
     print("="*60)
     
     app.run(host='0.0.0.0', port=int(AI_GATEWAY_PORT), debug=True)

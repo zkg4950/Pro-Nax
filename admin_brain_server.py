@@ -28,9 +28,9 @@ SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv(
 
 # Validate Supabase configuration
 if not SUPABASE_URL:
-    print("⚠️  WARNING: SUPABASE_URL not configured. Please set VITE_SUPABASE_URL or SUPABASE_URL in your environment variables.")
+    print("[WARNING] SUPABASE_URL not configured. Please set VITE_SUPABASE_URL or SUPABASE_URL in your environment variables.")
 if not SUPABASE_SERVICE_ROLE_KEY:
-    print("⚠️  WARNING: SUPABASE_SERVICE_ROLE_KEY not configured. Please set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY in your environment variables.")
+    print("[WARNING] SUPABASE_SERVICE_ROLE_KEY not configured. Please set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY in your environment variables.")
 
 # Ollama Configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -1027,18 +1027,18 @@ def health():
 
 if __name__ == '__main__':
     # Initialize memory database
-    print("🧠 Initializing AI Brain Memory System...")
+    print("[AI BRAIN] Initializing AI Brain Memory System...")
     init_memory_db()
-    print("✅ Memory System Initialized")
+    print("[AI BRAIN] Memory System Initialized")
     
-    print("🧠 AI Admin Brain Server Starting...")
-    print(f"📡 Ollama Model: {OLLAMA_MODEL}")
-    print(f"🔗 Ollama URL: {OLLAMA_BASE_URL}")
-    print(f"⏱️  Ollama Timeout: {OLLAMA_TIMEOUT}s")
-    print(f"🚀 Groq Fallback: {'Enabled' if GROQ_API_KEY else 'Disabled (set GROQ_API_KEY)'}")
-    print(f"💾 Supabase URL: {SUPABASE_URL}")
-    print(f"🗄️ Memory Database: {MEMORY_DB}")
-    print("🚀 Server running on http://localhost:8001")
+    print("[AI BRAIN] AI Admin Brain Server Starting...")
+    print(f"[AI BRAIN] Ollama Model: {OLLAMA_MODEL}")
+    print(f"[AI BRAIN] Ollama URL: {OLLAMA_BASE_URL}")
+    print(f"[AI BRAIN] Ollama Timeout: {OLLAMA_TIMEOUT}s")
+    print(f"[AI BRAIN] Groq Fallback: {'Enabled' if GROQ_API_KEY else 'Disabled (set GROQ_API_KEY)'}")
+    print(f"[AI BRAIN] Supabase URL: {SUPABASE_URL}")
+    print(f"[AI BRAIN] Memory Database: {MEMORY_DB}")
+    print("[AI BRAIN] Server running on http://localhost:8001")
     print("="*60)
     
     app.run(host='0.0.0.0', port=8001, debug=True)

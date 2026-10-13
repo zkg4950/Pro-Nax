@@ -119,11 +119,51 @@ export function AdminChat() {
     }
   };
 
+  // Detect language from text (Urdu/Saraiki keywords)
+  const detectLanguage = (text: string): 'ur' | 'en' => {
+    const urduKeywords = ['jani', 'sain', 'hai', 'karo', 'kia', 'nahi', 'theak', 'salaam', 'bhai', 'maine', 'tum', 'tumhare', 'mera', 'kuch', 'kar', 'dekho', 'check', 'sab', 'kiya', 'kyun', 'kaise', 'lega', 'lega', 'lega'];
+    const lowerText = text.toLowerCase();
+    
+    // Check if any Urdu/Saraiki keywords are present
+    const hasUrduKeywords = urduKeywords.some(keyword => lowerText.includes(keyword));
+    
+    return hasUrduKeywords ? 'ur' : 'en';
+  };
+
+  // Strip markdown formatting for TTS
+  const stripMarkdown = (text: string): string => {
+    return text
+      // Remove bold/italic markers
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      // Remove bullet points
+      .replace(/^[\s]*[-*•]\s+/gm, '')
+      // Remove headers
+      .replace(/^#+\s+/gm, '')
+      // Remove code blocks
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      // Remove emojis (basic pattern)
+      .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
+      .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')
+      .replace(/[\u{1F680}-\u{1F6FF}]/gu, '')
+      .replace(/[\u{1F700}-\u{1F77F}]/gu, '')
+      // Remove extra whitespace
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
   // Text-to-speech with AI Gateway Neural TTS
   const speak = async (text: string) => {
     if (!soundEnabled) return;
 
     try {
+      // Detect language from text
+      const detectedLanguage = detectLanguage(text);
+      
+      // Strip markdown formatting
+      const cleanText = stripMarkdown(text);
+      
       // Try AI Gateway Neural TTS first
       const response = await fetch('/api/ai/tts', {
         method: 'POST',
@@ -131,9 +171,9 @@ export function AdminChat() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          text: text,
+          text: cleanText,
           voice: voiceGender,
-          language: 'en' // Can be detected from text in future
+          language: detectedLanguage
         })
       });
 
@@ -149,13 +189,13 @@ export function AdminChat() {
         audio.onerror = () => {
           URL.revokeObjectURL(audioUrl);
           console.log('AI Gateway TTS failed, falling back to browser synthesis');
-          fallbackToBrowserTTS(text);
+          fallbackToBrowserTTS(cleanText);
         };
         
         audio.play();
       } else {
         console.log('AI Gateway TTS unavailable, falling back to browser synthesis');
-        fallbackToBrowserTTS(text);
+        fallbackToBrowserTTS(cleanText);
       }
     } catch (error) {
       console.log('AI Gateway TTS error, falling back to browser synthesis:', error);
@@ -170,28 +210,52 @@ export function AdminChat() {
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = speechSynthesis.getVoices();
     
-    // Try to find the best voice based on gender
-    const preferredVoice = voices.find(voice => 
-      voiceGender === 'female' 
-        ? (voice.name.includes('Google') && voice.name.includes('Female') ||
-           voice.name.includes('Microsoft Zira') ||
-           voice.name.includes('Microsoft Aria') ||
-           voice.name.includes('Microsoft Heera') ||
-           voice.name.includes('Microsoft Kalpana') ||
-           voice.name.includes('Samantha') ||
-           voice.name.includes('Victoria') ||
-           voice.name.includes('Female') || 
-           voice.name.includes('female'))
-        : (voice.name.includes('Microsoft David') ||
-           voice.name.includes('Microsoft Mark') ||
-           voice.name.includes('Google') && voice.name.includes('Male') ||
-           voice.name.includes('Male') || 
-           voice.name.includes('male'))
-    );
+    // Detect language
+    const detectedLanguage = detectLanguage(text);
+    
+    // Try to find the best voice based on gender and language
+    const preferredVoice = voices.find(voice => {
+      if (detectedLanguage === 'ur') {
+        // For Urdu, prefer Pakistani voices
+        if (voiceGender === 'female') {
+          return voice.lang === 'ur-PK' || 
+                 voice.name.includes('Uzma') ||
+                 voice.name.includes('Urdu') ||
+                 voice.name.includes('Pakistani');
+        } else {
+          return voice.lang === 'ur-PK' || 
+                 voice.name.includes('Asad') ||
+                 voice.name.includes('Urdu') ||
+                 voice.name.includes('Pakistani');
+        }
+      } else {
+        // For English, use existing logic
+        if (voiceGender === 'female') {
+          return (voice.name.includes('Google') && voice.name.includes('Female') ||
+                 voice.name.includes('Microsoft Zira') ||
+                 voice.name.includes('Microsoft Aria') ||
+                 voice.name.includes('Microsoft Heera') ||
+                 voice.name.includes('Microsoft Kalpana') ||
+                 voice.name.includes('Samantha') ||
+                 voice.name.includes('Victoria') ||
+                 voice.name.includes('Female') || 
+                 voice.name.includes('female'));
+        } else {
+          return (voice.name.includes('Microsoft David') ||
+                 voice.name.includes('Microsoft Mark') ||
+                 voice.name.includes('Google') && voice.name.includes('Male') ||
+                 voice.name.includes('Male') || 
+                 voice.name.includes('male'));
+        }
+      }
+    });
     
     if (preferredVoice) {
       utterance.voice = preferredVoice;
     }
+    
+    // Set language for better pronunciation
+    utterance.lang = detectedLanguage === 'ur' ? 'ur-PK' : 'en-US';
     
     // Natural voice settings
     utterance.pitch = voiceGender === 'female' ? 1.05 : 0.9;
