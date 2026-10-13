@@ -8,10 +8,21 @@ from crewai import Agent, Crew, Task
 from crewai.tools import tool
 from supabase import create_client, Client
 import os
+from dotenv import load_dotenv
+
+# Load .env explicitly if available
+load_dotenv()
 
 # Supabase Configuration
-SUPABASE_URL = os.getenv("VITE_SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_URL = os.getenv("VITE_SUPABASE_URL") or os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY", "")
+
+# Validate Supabase configuration
+if not SUPABASE_URL:
+    print("⚠️  WARNING: SUPABASE_URL not configured. Please set VITE_SUPABASE_URL or SUPABASE_URL in your environment variables.")
+if not SUPABASE_KEY:
+    print("⚠️  WARNING: SUPABASE_SERVICE_ROLE_KEY not configured. Please set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY in your environment variables.")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Ollama Configuration

@@ -1,8 +1,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
-const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL') || 'https://iouowplbxxivecctuilt.supabase.co';
+const SUPABASE_URL = Deno.env.get('VITE_SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const ADMIN_BRAIN_PORT = Deno.env.get('ADMIN_BRAIN_PORT') || '8001';
+
+// Validate configuration
+if (!SUPABASE_URL) {
+  console.error('ERROR: VITE_SUPABASE_URL not configured. Please set this environment variable.');
+}
 
 // Admin Brain with human-like conversation and Urdu support
 const ADMIN_BRAIN_SYSTEM_PROMPT = `You are the AI Admin Brain of a video platform application. You have COMPLETE and ABSOLUTE control over the entire system including:

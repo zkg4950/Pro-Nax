@@ -11,11 +11,21 @@ import os
 import requests
 import json
 from typing import Dict, List, Any
+from dotenv import load_dotenv
+
+# Load .env explicitly if available
+load_dotenv()
 
 # Supabase Configuration
-SUPABASE_URL = os.getenv("VITE_SUPABASE_URL", "https://iouowplbxxivecctuilt.supabase.co")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_URL = os.getenv("VITE_SUPABASE_URL") or os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY", "")
 SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+
+# Validate Supabase configuration
+if not SUPABASE_URL:
+    print("⚠️  WARNING: SUPABASE_URL not configured. Please set VITE_SUPABASE_URL or SUPABASE_URL in your environment variables.")
+if not SUPABASE_SERVICE_ROLE_KEY:
+    print("⚠️  WARNING: SUPABASE_SERVICE_ROLE_KEY not configured. Please set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY in your environment variables.")
 
 # Ollama Configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
