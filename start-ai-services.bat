@@ -37,7 +37,7 @@ echo.
 
 REM Start LangGraph Server
 echo [3/5] Starting LangGraph Server (port 8000)...
-start "LangGraph Server" cmd /k "npm run langgraph:server"
+start "LangGraph Server" cmd /k "npm run dev:langgraph"
 timeout /t 3 /nobreak >nul
 echo OK: LangGraph Server started
 echo.

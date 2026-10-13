@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, AlertCircle, Video, VideoOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Send, Bot, User, Loader2, AlertCircle, Video, VideoOff, Mic, MicOff, Volume2, VolumeX, UserCircle } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -24,6 +24,7 @@ export function AdminChat() {
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
   const videoRef = useRef<HTMLVideoElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -113,37 +114,84 @@ export function AdminChat() {
     }
   };
 
-  // Text-to-speech with female voice
-  const speak = (text: string) => {
+  // Text-to-speech with AI Gateway Neural TTS
+  const speak = async (text: string) => {
+    if (!soundEnabled) return;
+
+    try {
+      // Try AI Gateway Neural TTS first
+      const response = await fetch('/api/ai/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: text,
+          voice: voiceGender,
+          language: 'en' // Can be detected from text in future
+        })
+      });
+
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+        };
+        
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          console.log('AI Gateway TTS failed, falling back to browser synthesis');
+          fallbackToBrowserTTS(text);
+        };
+        
+        audio.play();
+      } else {
+        console.log('AI Gateway TTS unavailable, falling back to browser synthesis');
+        fallbackToBrowserTTS(text);
+      }
+    } catch (error) {
+      console.log('AI Gateway TTS error, falling back to browser synthesis:', error);
+      fallbackToBrowserTTS(text);
+    }
+  };
+
+  // Fallback to browser speech synthesis if AI Gateway is offline
+  const fallbackToBrowserTTS = (text: string) => {
     if (!soundEnabled) return;
 
     const utterance = new SpeechSynthesisUtterance(text);
     const voices = speechSynthesis.getVoices();
     
-    // Try to find the best female voice - prioritize natural sounding ones
-    const femaleVoice = voices.find(voice => 
-      voice.name.includes('Google') && voice.name.includes('Female') ||
-      voice.name.includes('Microsoft Zira') ||
-      voice.name.includes('Microsoft Aria') ||
-      voice.name.includes('Microsoft Heera') ||
-      voice.name.includes('Microsoft Kalpana') ||
-      voice.name.includes('Samantha') ||
-      voice.name.includes('Victoria') ||
-      voice.name.includes('Female') || 
-      voice.name.includes('female')
+    // Try to find the best voice based on gender
+    const preferredVoice = voices.find(voice => 
+      voiceGender === 'female' 
+        ? (voice.name.includes('Google') && voice.name.includes('Female') ||
+           voice.name.includes('Microsoft Zira') ||
+           voice.name.includes('Microsoft Aria') ||
+           voice.name.includes('Microsoft Heera') ||
+           voice.name.includes('Microsoft Kalpana') ||
+           voice.name.includes('Samantha') ||
+           voice.name.includes('Victoria') ||
+           voice.name.includes('Female') || 
+           voice.name.includes('female'))
+        : (voice.name.includes('Microsoft David') ||
+           voice.name.includes('Microsoft Mark') ||
+           voice.name.includes('Google') && voice.name.includes('Male') ||
+           voice.name.includes('Male') || 
+           voice.name.includes('male'))
     );
     
-    if (femaleVoice) {
-      utterance.voice = femaleVoice;
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
     }
     
-    // More natural voice settings - very human-like
-    utterance.pitch = 1.05; // Very subtle female pitch
-    utterance.rate = 0.85; // Slower for more natural, human-like speech
+    // Natural voice settings
+    utterance.pitch = voiceGender === 'female' ? 1.05 : 0.9;
+    utterance.rate = 0.85;
     utterance.volume = 1.0;
-    
-    // Add pauses for more natural speech
-    utterance.text = text.replace(/[.!?]/g, '$& ');
     
     speechSynthesis.speak(utterance);
   };
@@ -275,6 +323,15 @@ export function AdminChat() {
             title={soundEnabled ? 'Mute Voice' : 'Enable Voice'}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+          
+          {/* Voice Gender Toggle */}
+          <button
+            onClick={() => setVoiceGender(voiceGender === 'female' ? 'male' : 'female')}
+            className={`p-2 rounded-lg ${voiceGender === 'female' ? 'bg-pink-600 text-white' : 'bg-blue-600 text-white'} hover:opacity-80 transition`}
+            title={voiceGender === 'female' ? 'Switch to Male Voice' : 'Switch to Female Voice'}
+          >
+            {voiceGender === 'female' ? <Bot className="w-4 h-4" /> : <UserCircle className="w-4 h-4" />}
           </button>
           
           <div className="flex items-center gap-2 text-xs text-gray-400">

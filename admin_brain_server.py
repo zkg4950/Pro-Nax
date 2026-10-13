@@ -36,6 +36,11 @@ if not SUPABASE_SERVICE_ROLE_KEY:
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 OLLAMA_FALLBACK_MODEL = os.getenv("OLLAMA_FALLBACK_MODEL", "tinyllama")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "180"))  # Increased default to 180 seconds
+
+# Groq Configuration (fallback)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192")
 
 # Check Ollama availability
 def check_ollama_available():
@@ -282,19 +287,11 @@ class SupabaseAdminTools:
 supabase_tools = SupabaseAdminTools()
 
 def call_ollama(messages, system_prompt=None):
-    """Call Ollama API for chat completion with fallback model"""
+    """Call Ollama API for chat completion with fallback to Groq"""
     message_lower = messages[-1].get("content", "").lower() if messages else ""
     
     # First check if we need to call real Supabase APIs
-    if "database" in message_lower and "table" in message_lower:
-        try:
-            # Call Supabase to get table info
-            tables_info = supabase_tools.list_tables()
-            return f"Jani, maine database tables check kiye hain. Yeh raha information: {tables_info}"
-        except Exception as e:
-            return f"Jani, database tables check mein error aa gaya hai: {str(e)}"
-    
-    elif "database" in message_lower or "db" in message_lower:
+    if "database" in message_lower or "db" in message_lower:
         try:
             # Get system health which includes database info
             health = supabase_tools.get_system_health()
@@ -305,20 +302,26 @@ def call_ollama(messages, system_prompt=None):
     elif "user" in message_lower and "count" in message_lower:
         try:
             # Get user count
-            users = supabase_tools.list_users()
-            return f"Jani, total users hain: {len(users.get('users', []))}"
+            users = supabase_tools.get_users(limit=10)
+            return f"Jani, total users hain: {users.get('count', 0)}"
         except Exception as e:
             return f"Jani, user count mein error aa gaya hai: {str(e)}"
     
     # Check Ollama availability and select model
     ollama_available, available_models = check_ollama_available()
     if not ollama_available:
-        return "Jani, Ollama server chal nahi raha hai. Please ensure Ollama is running."
+        # Try Groq fallback if Ollama is not available
+        if GROQ_API_KEY:
+            return call_groq(messages, system_prompt)
+        return "Jani, Ollama server chal nahi raha hai. Please ensure Ollama is running or configure GROQ_API_KEY."
     
     # Select model (use fallback if primary not available)
     selected_model = OLLAMA_MODEL if OLLAMA_MODEL in available_models else OLLAMA_FALLBACK_MODEL
     if selected_model not in available_models:
-        return f"Jani, Ollama models available: {', '.join(available_models)}. Please pull required model."
+        # Try Groq fallback if model not available
+        if GROQ_API_KEY:
+            return call_groq(messages, system_prompt)
+        return f"Jani, Ollama models available: {', '.join(available_models)}. Please pull required model or configure GROQ_API_KEY."
     
     # For all other messages, use Ollama with selected model
     try:
@@ -344,7 +347,7 @@ Be conversational and helpful. Use "jani" to address the user."""
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/chat",
             json=payload,
-            timeout=90
+            timeout=OLLAMA_TIMEOUT  # Increased timeout to 180 seconds
         )
         
         if response.status_code == 200:
@@ -355,9 +358,62 @@ Be conversational and helpful. Use "jani" to address the user."""
             else:
                 return "Jani, Ollama se empty response aaya hai. Dubara try karein."
         else:
+            # Try Groq fallback on Ollama error
+            if GROQ_API_KEY:
+                return call_groq(messages, system_prompt)
             return f"Jani, Ollama error: {response.status_code}. Server slow chal raha hai."
     except Exception as e:
+        # Try Groq fallback on Ollama timeout/connection error
+        if GROQ_API_KEY:
+            print(f"Ollama timeout/error: {e}, falling back to Groq")
+            return call_groq(messages, system_prompt)
         return f"Jani, Ollama connection error: {str(e)}. Server slow hai ya Ollama chal nahi raha."
+
+def call_groq(messages, system_prompt=None):
+    """Call Groq API as fallback when Ollama is slow or unavailable"""
+    if not GROQ_API_KEY:
+        return "Jani, Groq API key not configured. Please set GROQ_API_KEY environment variable."
+    
+    try:
+        simplified_messages = messages[-5:] if len(messages) > 5 else messages
+        # Strong Roman Urdu prompt
+        simple_prompt = """IMPORTANT: You MUST respond ONLY in Roman Urdu (Urdu written in English letters). 
+Do NOT use English words. Do NOT use any other language.
+Example: "Jani, maine check kiya hai. Sab theek hai."
+Be conversational and helpful. Use "jani" to address the user."""
+        
+        payload = {
+            "model": GROQ_MODEL,
+            "messages": simplified_messages,
+            "temperature": 0.7,
+            "max_tokens": 200
+        }
+        if system_prompt:
+            payload["messages"].insert(0, {"role": "system", "content": system_prompt})
+        else:
+            payload["messages"].insert(0, {"role": "system", "content": simple_prompt})
+        
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json=payload,
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            ai_response = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if ai_response:
+                return ai_response
+            else:
+                return "Jani, Groq se empty response aaya hai. Dubara try karein."
+        else:
+            return f"Jani, Groq error: {response.status_code}. {response.text}"
+    except Exception as e:
+        return f"Jani, Groq connection error: {str(e)}."
 
 def detect_intent_and_execute(message, video_frame=None):
     """Detect user intent and execute appropriate actions"""
@@ -542,6 +598,8 @@ if __name__ == '__main__':
     print("🧠 AI Admin Brain Server Starting...")
     print(f"📡 Ollama Model: {OLLAMA_MODEL}")
     print(f"🔗 Ollama URL: {OLLAMA_BASE_URL}")
+    print(f"⏱️  Ollama Timeout: {OLLAMA_TIMEOUT}s")
+    print(f"🚀 Groq Fallback: {'Enabled' if GROQ_API_KEY else 'Disabled (set GROQ_API_KEY)'}")
     print(f"💾 Supabase URL: {SUPABASE_URL}")
     print(f"🗄️ Memory Database: {MEMORY_DB}")
     print("🚀 Server running on http://localhost:8001")
