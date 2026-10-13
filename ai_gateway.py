@@ -295,6 +295,112 @@ def admin_chat():
             "error": str(e)
         }), 500
 
+# TTS endpoint (Text-to-Speech with neural voices)
+@app.route('/api/ai/tts', methods=['POST'])
+def text_to_speech():
+    """Generate speech using neural voices (OpenAI TTS or Edge-TTS fallback)"""
+    try:
+        data = request.json
+        text = data.get("text", "")
+        voice = data.get("voice", "female")  # 'female' or 'male'
+        language = data.get("language", "en")
+        
+        if not text:
+            return jsonify({
+                "success": False,
+                "error": "text is required"
+            }), 400
+        
+        # Try OpenAI TTS if API key is available
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if openai_api_key:
+            try:
+                # Map voice gender to OpenAI TTS voices
+                openai_voice = "nova" if voice == "female" else "onyx"
+                
+                response = requests.post(
+                    "https://api.openai.com/v1/audio/speech",
+                    headers={
+                        "Authorization": f"Bearer {openai_api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "tts-1",
+                        "input": text,
+                        "voice": openai_voice
+                    },
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    return response.content, 200, {
+                        'Content-Type': 'audio/mpeg',
+                        'Content-Disposition': 'attachment; filename=speech.mp3'
+                    }
+            except Exception as e:
+                print(f"OpenAI TTS failed: {e}")
+        
+        # Fallback: Use Edge-TTS (Microsoft Neural TTS)
+        try:
+            import edge_tts
+            import asyncio
+            
+            # Map language and voice to Edge-TTS voices
+            voice_map = {
+                'skr': 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural',
+                'ur': 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural',
+                'ar': 'ar-SA-ZariyahNeural' if voice == 'female' else 'ar-SA-HamedNeural',
+                'hi': 'hi-IN-SwaraNeural' if voice == 'female' else 'hi-IN-MadhurNeural',
+                'en': 'en-US-JennyNeural' if voice == 'female' else 'en-US-GuyNeural',
+            }
+            
+            edge_voice = voice_map.get(language, voice_map['en'])
+            
+            communicate = edge_tts.Communicate(text, edge_voice)
+            
+            # Generate audio synchronously using edge-tts save method
+            import tempfile
+            import os as os_module
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
+                temp_path = temp_file.name
+            
+            # Run async function to save audio
+            async def save_audio():
+                await communicate.save(temp_path)
+            
+            asyncio.run(save_audio())
+            
+            # Read the audio file
+            with open(temp_path, 'rb') as f:
+                audio_data = f.read()
+            
+            # Clean up temp file
+            os_module.unlink(temp_path)
+            
+            if audio_data:
+                return audio_data, 200, {
+                    'Content-Type': 'audio/mpeg',
+                    'Content-Disposition': 'attachment; filename=speech.mp3'
+                }
+        except ImportError:
+            print("edge-tts not installed, skipping")
+        except Exception as e:
+            print(f"Edge-TTS failed: {e}")
+        
+        # If both fail, return error
+        return jsonify({
+            "success": False,
+            "error": "TTS services unavailable. Please configure OPENAI_API_KEY or install edge-tts.",
+            "fallback": "Browser TTS will be used as fallback"
+        }), 503
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 if __name__ == '__main__':
     print("="*60)
     print("🧠 ProNax Unified AI Gateway")

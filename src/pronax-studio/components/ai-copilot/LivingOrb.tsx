@@ -135,15 +135,17 @@ export const LivingOrb: React.FC<{ size?: number }> = ({ size = 200 }) => {
         }
       }
 
-      // Draw waveform when speaking
+      // Draw waveform when speaking (lip-sync effect)
       if (orbState === 'SPEAKING') {
         const waveCount = 3;
         for (let w = 0; w < waveCount; w++) {
           ctx.beginPath();
           for (let i = 0; i <= 360; i += 5) {
             const angle = (i * Math.PI) / 180;
+            // Enhanced waveform with audio level for lip-sync
+            const waveAmplitude = 10 + audioLevel * 20;
             const waveRadius = dynamicRadius * (1.2 + w * 0.2) + 
-                              Math.sin(angle * 4 + time * 5 + w) * 10 * audioLevel;
+                              Math.sin(angle * 4 + time * 5 + w) * waveAmplitude;
             const wx = centerX + Math.cos(angle) * waveRadius;
             const wy = centerY + Math.sin(angle) * waveRadius;
             
@@ -160,6 +162,13 @@ export const LivingOrb: React.FC<{ size?: number }> = ({ size = 200 }) => {
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
+        
+        // Add inner pulsing core synced to audio
+        const pulseRadius = dynamicRadius * 0.5 + audioLevel * 15;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + audioLevel * 0.4})`;
+        ctx.fill();
       }
 
       // Draw listening indicator

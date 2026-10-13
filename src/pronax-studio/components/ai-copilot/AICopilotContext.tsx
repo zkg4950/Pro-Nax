@@ -5,6 +5,7 @@ import { detectLanguageFromGeo, detectLanguageFromText, getGreetingForLanguage, 
 // Types
 export type OrbState = 'IDLE' | 'LISTENING' | 'THINKING' | 'SPEAKING';
 export type PresenceState = 'UNKNOWN' | 'PRESENT' | 'ABSENT';
+export type VoiceGender = 'female' | 'male';
 
 export interface Message {
   id: string;
@@ -26,6 +27,7 @@ export interface AICopilotState {
   isMuted: boolean;
   speechEnabled: boolean;
   lastTranscript: string;
+  voiceGender: VoiceGender;
   
   // Orb
   orbState: OrbState;
@@ -57,6 +59,8 @@ export interface AICopilotActions {
   setSpeechEnabled: (enabled: boolean) => void;
   speak: (text: string) => Promise<void>;
   stopSpeaking: () => void;
+  toggleVoiceGender: () => void;
+  setVoiceGender: (gender: VoiceGender) => void;
   
   // Orb
   setOrbState: (state: OrbState) => void;
@@ -139,6 +143,25 @@ const saveConversation = (messages: Message[]) => {
   }
 };
 
+// Load voice preference from localStorage
+const loadVoicePreference = (): VoiceGender => {
+  try {
+    const saved = localStorage.getItem('pronax_ai_preferred_voice');
+    return (saved === 'male' || saved === 'female') ? saved : 'female';
+  } catch {
+    return 'female';
+  }
+};
+
+// Save voice preference to localStorage
+const saveVoicePreference = (voice: VoiceGender) => {
+  try {
+    localStorage.setItem('pronax_ai_preferred_voice', voice);
+  } catch (e) {
+    console.error('Failed to save voice preference:', e);
+  }
+};
+
 export const AICopilotProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AICopilotState>({
     presenceState: 'UNKNOWN',
@@ -149,6 +172,7 @@ export const AICopilotProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     isMuted: false,
     speechEnabled: true,
     lastTranscript: '',
+    voiceGender: loadVoicePreference(),
     orbState: 'IDLE',
     audioLevel: 0,
     messages: loadConversation(),
@@ -288,20 +312,130 @@ export const AICopilotProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     stopSpeaking();
     setState(prev => ({ ...prev, isSpeaking: true, orbState: 'SPEAKING' }));
     
+    // Try backend TTS first
+    try {
+      const response = await fetch('/api/ai/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          voice: state.voiceGender,
+          language: state.currentLanguage
+        }),
+      });
+
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          setState(prev => ({ ...prev, isSpeaking: false, orbState: 'IDLE' }));
+        };
+        
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          setState(prev => ({ ...prev, isSpeaking: false, orbState: 'IDLE' }));
+        };
+        
+        audio.play();
+        return;
+      }
+    } catch (error) {
+      console.log('Backend TTS unavailable, falling back to browser synthesis');
+    }
+    
+    // Fallback to browser Web Speech synthesis
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
     utterance.volume = 1.0;
     
     // Set language for TTS
     const speechLang = getLanguageCodeForSpeech(state.currentLanguage);
     utterance.lang = speechLang;
     
-    // Try to get a natural voice for the current language
+    // Set pitch and rate based on voice gender (tuned for ultra-realistic effect)
+    if (state.voiceGender === 'female') {
+      utterance.pitch = 1.12;
+      utterance.rate = 0.98;
+    } else {
+      utterance.pitch = 0.84;
+      utterance.rate = 0.94;
+    }
+    
+    // Intelligent voice matcher based on language and gender
     const voices = speechSynthesis.getVoices();
-    const preferredVoice = voices.find(v => v.lang.startsWith(speechLang.split('-')[0])) ||
-                           voices.find(v => v.lang.startsWith('en')) ||
-                           voices[0];
+    let preferredVoice = null;
+    
+    // Priority-based voice selection
+    const getVoicePriority = (voice: SpeechSynthesisVoice, gender: VoiceGender, lang: string): number => {
+      const langCode = lang.split('-')[0];
+      const voiceLang = voice.lang.split('-')[0];
+      const voiceName = voice.name.toLowerCase();
+      
+      // Priority weights
+      let priority = 0;
+      
+      // Language match (highest priority)
+      if (voiceLang === langCode) {
+        priority += 100;
+      } else if (voiceLang === 'en') {
+        priority += 50; // English as fallback
+      }
+      
+      // Neural voice detection
+      if (voiceName.includes('neural')) {
+        priority += 30;
+      }
+      
+      // Gender-specific voice detection for different languages
+      if (langCode === 'ur' || langCode === 'skr') {
+        // Urdu/Saraiki
+        if (gender === 'female') {
+          if (voiceName.includes('uzma')) priority += 80;
+          if (voiceName.includes('female')) priority += 40;
+        } else {
+          if (voiceName.includes('asad')) priority += 80;
+          if (voiceName.includes('male')) priority += 40;
+        }
+      } else if (langCode === 'en') {
+        // English
+        if (gender === 'female') {
+          if (voiceName.includes('jenny') || voiceName.includes('aria') || voiceName.includes('samantha') || voiceName.includes('siri')) priority += 80;
+          if (voiceName.includes('female') || voiceName.includes('woman')) priority += 40;
+        } else {
+          if (voiceName.includes('guy') || voiceName.includes('daniel')) priority += 80;
+          if (voiceName.includes('male') || voiceName.includes('man')) priority += 40;
+        }
+      } else if (langCode === 'ar') {
+        // Arabic
+        if (gender === 'female') {
+          if (voiceName.includes('zariyah') || voiceName.includes('female')) priority += 80;
+        } else {
+          if (voiceName.includes('hamed') || voiceName.includes('male')) priority += 80;
+        }
+      } else if (langCode === 'hi') {
+        // Hindi
+        if (gender === 'female') {
+          if (voiceName.includes('swara') || voiceName.includes('female')) priority += 80;
+        } else {
+          if (voiceName.includes('madhur') || voiceName.includes('male')) priority += 80;
+        }
+      }
+      
+      return priority;
+    };
+    
+    // Find best voice by priority
+    if (voices.length > 0) {
+      const sortedVoices = [...voices].sort((a, b) => {
+        const priorityA = getVoicePriority(a, state.voiceGender, speechLang);
+        const priorityB = getVoicePriority(b, state.voiceGender, speechLang);
+        return priorityB - priorityA;
+      });
+      
+      preferredVoice = sortedVoices[0];
+    }
     
     if (preferredVoice) {
       utterance.voice = preferredVoice;
@@ -317,7 +451,7 @@ export const AICopilotProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     
     speechSynthesisRef.current = utterance;
     speechSynthesis.speak(utterance);
-  }, [state.soundEnabled, state.isMuted, state.currentLanguage]);
+  }, [state.soundEnabled, state.isMuted, state.currentLanguage, state.voiceGender]);
 
   const stopSpeaking = useCallback(() => {
     if (speechSynthesisRef.current) {
@@ -359,6 +493,21 @@ export const AICopilotProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const toggleAmbient = useCallback(() => {
     setState(prev => ({ ...prev, ambientEnabled: !prev.ambientEnabled }));
+  }, []);
+
+  const toggleVoiceGender = useCallback(() => {
+    setState(prev => {
+      const newGender = prev.voiceGender === 'female' ? 'male' : 'female';
+      saveVoicePreference(newGender);
+      return { ...prev, voiceGender: newGender };
+    });
+  }, []);
+
+  const setVoiceGender = useCallback((gender: VoiceGender) => {
+    setState(prev => {
+      saveVoicePreference(gender);
+      return { ...prev, voiceGender: gender };
+    });
   }, []);
 
   const setCurrentLanguage = useCallback((lang: string) => {
@@ -466,6 +615,8 @@ export const AICopilotProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setSpeechEnabled,
     speak,
     stopSpeaking,
+    toggleVoiceGender,
+    setVoiceGender,
     setOrbState,
     setAudioLevel,
     addMessage,

@@ -9,7 +9,9 @@ import {
   Bot,
   User,
   Lightbulb,
+  UserCircle,
 } from "lucide-react";
+import { useAICopilot } from "./ai-copilot/AICopilotContext";
 
 interface AIAssistantDrawerProps {
   isOpen: boolean;
@@ -25,6 +27,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { state, actions } = useAICopilot();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -152,6 +155,38 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
           className="p-1.5 rounded-full hover:bg-[#2f2f2f] text-gray-400 hover:text-white transition-colors"
         >
           <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Voice Toggle */}
+      <div className="flex items-center justify-center gap-2 p-3 border-b border-[#292929] bg-[#1a1a1a]">
+        <button
+          onClick={() => {
+            actions.setVoiceGender('female');
+            actions.speak('السلام علیکم سئیں! میں تہاݙی کیویں مدد کر سکدا ہاں؟');
+          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            state.voiceGender === 'female'
+              ? 'bg-pink-600/20 text-pink-400 border border-pink-500/30'
+              : 'bg-gray-800/50 text-gray-400 border border-gray-700 hover:bg-gray-800'
+          }`}
+        >
+          <User className="w-3.5 h-3.5" />
+          <span>👩 Female ("Noor")</span>
+        </button>
+        <button
+          onClick={() => {
+            actions.setVoiceGender('male');
+            actions.speak('السلام علیکم سئیں! میں تہاݙی کیویں مدد کر سکدا ہاں؟');
+          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            state.voiceGender === 'male'
+              ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+              : 'bg-gray-800/50 text-gray-400 border border-gray-700 hover:bg-gray-800'
+          }`}
+        >
+          <UserCircle className="w-3.5 h-3.5" />
+          <span>👨 Male ("Hamza")</span>
         </button>
       </div>
 

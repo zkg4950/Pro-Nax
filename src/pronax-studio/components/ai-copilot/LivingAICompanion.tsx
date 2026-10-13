@@ -4,7 +4,7 @@ import { useAICopilot } from './AICopilotContext';
 import { LivingOrb } from './LivingOrb';
 import { PresenceDetector } from './PresenceDetector';
 import { VoiceAssistant } from './VoiceAssistant';
-import { X, Maximize2, Minimize2, MessageSquare, Sparkles, User, Bot, Trash2, Send } from 'lucide-react';
+import { X, Maximize2, Minimize2, MessageSquare, Sparkles, User, Bot, Trash2, Send, UserCircle } from 'lucide-react';
 
 interface LivingAICompanionProps {
   isOpen: boolean;
@@ -134,6 +134,38 @@ export const LivingAICompanion: React.FC<LivingAICompanionProps> = ({
           {/* Bottom Controls */}
           <div className="p-4 border-t border-gray-800">
             <div className="max-w-2xl mx-auto space-y-4">
+              {/* Voice Switcher */}
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => {
+                    actions.setVoiceGender('female');
+                    actions.speak('السلام علیکم سئیں! میں تہاݙی کیویں مدد کر سکدا ہاں؟');
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    state.voiceGender === 'female'
+                      ? 'bg-pink-600/20 text-pink-400 border border-pink-500/30'
+                      : 'bg-gray-800/50 text-gray-400 border border-gray-700 hover:bg-gray-800'
+                  }`}
+                >
+                  <User className="w-4 h-4" />
+                  <span>👩 Female ("Noor")</span>
+                </button>
+                <button
+                  onClick={() => {
+                    actions.setVoiceGender('male');
+                    actions.speak('السلام علیکم سئیں! میں تہاݙی کیویں مدد کر سکدا ہاں؟');
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    state.voiceGender === 'male'
+                      ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                      : 'bg-gray-800/50 text-gray-400 border border-gray-700 hover:bg-gray-800'
+                  }`}
+                >
+                  <UserCircle className="w-4 h-4" />
+                  <span>👨 Male ("Hamza")</span>
+                </button>
+              </div>
+
               {/* Quick Actions */}
               <div className="flex gap-2 justify-center">
                 {quickActions.map((action, i) => (

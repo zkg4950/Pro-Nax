@@ -1,7 +1,7 @@
 /* Copyright (c) 2026 ProNax. All rights reserved. */
 import React, { useEffect, useRef, useState } from 'react';
 import { useAICopilot } from './AICopilotContext';
-import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, User, UserCircle } from 'lucide-react';
 
 export const VoiceAssistant: React.FC = () => {
   const { state, actions } = useAICopilot();
@@ -97,6 +97,19 @@ export const VoiceAssistant: React.FC = () => {
     actions.toggleSound();
   };
 
+  const handleToggleVoice = () => {
+    actions.toggleVoiceGender();
+  };
+
+  const handleVoicePreview = () => {
+    const previewText = state.currentLanguage === 'skr' 
+      ? 'السلام علیکم، میں تہاݙا پرو-نیکس ای۔آی۔ ساتھی ہاں۔'
+      : state.currentLanguage === 'ur'
+      ? 'السلام علیکم، میں آپ کا ProNax AI ساتھی ہوں۔'
+      : 'Hello, I am your ProNax AI companion!';
+    actions.speak(previewText);
+  };
+
   return (
     <div className="flex flex-col gap-2">
       {/* Microphone Level Visualizer */}
@@ -147,6 +160,44 @@ export const VoiceAssistant: React.FC = () => {
               <span>Listen</span>
             </>
           )}
+        </button>
+
+        {/* Voice Gender Toggle */}
+        <button
+          onClick={handleToggleVoice}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+            state.voiceGender === 'female'
+              ? 'bg-pink-600/20 text-pink-400 border border-pink-500/30'
+              : 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+          }`}
+          title={`Switch to ${state.voiceGender === 'female' ? 'Male' : 'Female'} voice`}
+        >
+          {state.voiceGender === 'female' ? (
+            <>
+              <User className="w-4 h-4" />
+              <span>Female</span>
+            </>
+          ) : (
+            <>
+              <UserCircle className="w-4 h-4" />
+              <span>Male</span>
+            </>
+          )}
+        </button>
+
+        {/* Voice Preview */}
+        <button
+          onClick={handleVoicePreview}
+          disabled={state.isSpeaking}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+            state.isSpeaking
+              ? 'bg-gray-900 text-gray-600 border border-gray-800 cursor-not-allowed'
+              : 'bg-gray-800 text-gray-400 border border-gray-700 hover:border-gray-600'
+          }`}
+          title="Test voice"
+        >
+          <Volume2 className="w-4 h-4" />
+          <span>Test</span>
         </button>
 
         {/* Mute Toggle */}
