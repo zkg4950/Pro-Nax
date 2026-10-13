@@ -393,8 +393,8 @@ export const WORKFLOW_CONFIGS: Record<TaskType, WorkflowConfig> = {
     name: 'Video Assistant Workflow',
     description: 'AI-powered video assistant for title, description, hashtags, and metadata editing',
     taskType: TaskType.VIDEO_ASSISTANT,
-    agents: [AgentType.CREATOR_COACH],
-    defaultAgent: AgentType.CREATOR_COACH,
+    agents: [AgentType.VIDEO_ASSISTANT],
+    defaultAgent: AgentType.VIDEO_ASSISTANT,
     checkpointEnabled: false,
   },
 };

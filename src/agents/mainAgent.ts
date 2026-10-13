@@ -283,6 +283,9 @@ const orchestratorNode: AgentNodeFunction = async (state: AgentStateType) => {
     case TaskType.CONTENT_DISCOVERY:
       nextAgent = AgentType.RECOMMENDATION_ENGINE;
       break;
+    case TaskType.VIDEO_ASSISTANT:
+      nextAgent = AgentType.VIDEO_ASSISTANT;
+      break;
     default:
       nextAgent = AgentType.ORCHESTRATOR;
   }
@@ -621,6 +624,54 @@ Language: Respond in the same language as the user's request (English, Urdu, or 
 };
 
 /**
+ * Video Assistant Node with LLM
+ * Provides AI-powered video assistance for title, description, hashtags, and metadata
+ */
+const videoAssistantNode: AgentNodeFunction = async (state: AgentStateType) => {
+  console.log('[Video Assistant] Processing video request for video:', state.videoId);
+  
+  const userRequest = state.taskDescription || state.messages?.[0] || '';
+  const videoId = state.videoId || '';
+  const videoTitle = state.videoTitle || '';
+  const videoCategory = state.videoCategory || '';
+
+  const llmPrompt = `Act as an expert video content optimizer. Help the user with their video.
+User Request: ${userRequest}
+Video ID: ${videoId}
+Current Title: ${videoTitle}
+Category: ${videoCategory}
+
+Provide response in JSON format with suggestions, title optimizations, description, and hashtags as requested.`;
+
+  try {
+    const llmResponse = await callLocalLLM(llmPrompt, {
+      userId: state.userId,
+      userRole: state.userRole,
+      taskDescription: state.taskDescription,
+      videoId,
+      videoTitle,
+      videoCategory,
+    });
+    const response = JSON.parse(llmResponse);
+    return {
+      currentAgent: AgentType.ORCHESTRATOR,
+      status: 'completed',
+      lastUpdated: new Date(),
+      messages: [`Video assistant response generated for video: ${videoId}`],
+      agentOutputs: { video_assistant: response },
+    };
+  } catch (error: any) {
+    return {
+      currentAgent: AgentType.ORCHESTRATOR,
+      status: 'failed',
+      lastUpdated: new Date(),
+      errors: [error.message],
+      agentOutputs: { video_assistant: { error: error.message } },
+    };
+  }
+};
+
+/**
  * Routing function to determine next node based on current agent
  */
 const routeToNextAgent = (state: AgentStateType): string => {
@@ -647,7 +698,9 @@ const routeToNextAgent = (state: AgentStateType): string => {
                     ? AgentType.RECOMMENDATION_ENGINE
                     : state.taskType === TaskType.CREATOR_COACH
                       ? AgentType.CREATOR_COACH
-                      : END;
+                      : state.taskType === TaskType.VIDEO_ASSISTANT
+                        ? AgentType.VIDEO_ASSISTANT
+                        : END;
 
     case AgentType.CONTENT_ANALYZER:
       return state.taskType === TaskType.VIDEO_UPLOAD
@@ -674,6 +727,9 @@ const routeToNextAgent = (state: AgentStateType): string => {
     case AgentType.SUPPORT_AGENT:
       return END;
 
+    case AgentType.VIDEO_ASSISTANT:
+      return END;
+
     default:
       return END;
   }
@@ -697,6 +753,7 @@ export function createMainAgentGraph() {
   graph.addNode(AgentType.ANALYTICS_AGENT, analyticsAgentNode);
   graph.addNode(AgentType.SUPPORT_AGENT, supportAgentNode);
   graph.addNode(AgentType.CREATOR_COACH, creatorCoachNode);
+  graph.addNode(AgentType.VIDEO_ASSISTANT, videoAssistantNode);
 
   // Add edges
   graph.addEdge(START, AgentType.ORCHESTRATOR);
@@ -752,6 +809,12 @@ export function createMainAgentGraph() {
 
   graph.addConditionalEdges(
     AgentType.CREATOR_COACH,
+    routeToNextAgent,
+    [END]
+  );
+
+  graph.addConditionalEdges(
+    AgentType.VIDEO_ASSISTANT,
     routeToNextAgent,
     [END]
   );
