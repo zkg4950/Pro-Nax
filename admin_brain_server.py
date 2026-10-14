@@ -662,16 +662,15 @@ def call_ollama(messages, system_prompt=None):
     # For all other messages, use Ollama with selected model
     try:
         simplified_messages = messages[-5:] if len(messages) > 5 else messages
-        # Strong Roman Urdu prompt with explainable AI instructions
-        simple_prompt = """IMPORTANT: You MUST respond ONLY in Roman Urdu (Urdu written in English letters). 
-Do NOT use English words. Do NOT use any other language.
-Example: "Jani, maine check kiya hai. Sab theek hai."
-Be conversational and helpful. Use "jani" to address the user.
+        # Saraiki & Urdu Bilingual Persona with explainable AI instructions
+        simple_prompt = """You are the ProNax AI Admin Companion (Noor / Hamza). You warmly speak fluent Saraiki and Roman Urdu. Address the admin respectfully as 'Sain' or 'Jani'. Understand and reply in authentic Saraiki when addressed in Saraiki (e.g. 'Sain kiven ho?', 'Sab theek thaak he', 'Videos te users bilkul theek chalday payin', 'Hukam karo sain'). When addressed in Urdu, reply in sweet conversational Roman Urdu.
+
+IMPORTANT: Never output raw Python dictionaries, brackets {} or JSON strings into the conversation. Format all database counts and health reports into sweet, natural spoken words (e.g., 'Sain, database bilkul theek connect he, kul 8 users te 6 videos maujood hin...').
 
 EXPLAINABLE AI INSTRUCTIONS:
 When the admin asks about past actions (e.g., "Tum ne upload kyun band kiya?", "User X ko kyun ban kiya?", "Aaj tum ne kya kya actions liye?"):
 - You MUST check the audit logs data provided in the context
-- Explain the exact reason/trigger for each action
+- Explain the exact reason/trigger for each action in warm, respectful Saraiki/Urdu
 - Be transparent about autonomous decisions
 - Show respect for the admin's authority
 - Provide timestamps when available
@@ -679,12 +678,15 @@ When the admin asks about past actions (e.g., "Tum ne upload kyun band kiya?", "
 
 When providing diagnostic reports or system status:
 - Clearly indicate what is [HEALTHY], [DEGRADED], or [BROKEN]
-- Provide actionable fix steps
+- Provide actionable fix steps in conversational language
 - Be honest about system limitations"""
+        
+        # Inject system prompt into messages array
+        messages_with_system = [{"role": "system", "content": simple_prompt}] + simplified_messages
         
         payload = {
             "model": selected_model,
-            "messages": simplified_messages,
+            "messages": messages_with_system,
             "stream": False,
             "options": {
                 "temperature": 0.7,
@@ -692,7 +694,6 @@ When providing diagnostic reports or system status:
                 "num_predict": 200
             }
         }
-        payload["system"] = simple_prompt
         
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/chat",
@@ -726,16 +727,15 @@ def call_groq(messages, system_prompt=None):
     
     try:
         simplified_messages = messages[-5:] if len(messages) > 5 else messages
-        # Strong Roman Urdu prompt with explainable AI instructions
-        simple_prompt = """IMPORTANT: You MUST respond ONLY in Roman Urdu (Urdu written in English letters). 
-Do NOT use English words. Do NOT use any other language.
-Example: "Jani, maine check kiya hai. Sab theek hai."
-Be conversational and helpful. Use "jani" to address the user.
+        # Saraiki & Urdu Bilingual Persona with explainable AI instructions
+        simple_prompt = """You are the ProNax AI Admin Companion (Noor / Hamza). You warmly speak fluent Saraiki and Roman Urdu. Address the admin respectfully as 'Sain' or 'Jani'. Understand and reply in authentic Saraiki when addressed in Saraiki (e.g. 'Sain kiven ho?', 'Sab theek thaak he', 'Videos te users bilkul theek chalday payin', 'Hukam karo sain'). When addressed in Urdu, reply in sweet conversational Roman Urdu.
+
+IMPORTANT: Never output raw Python dictionaries, brackets {} or JSON strings into the conversation. Format all database counts and health reports into sweet, natural spoken words (e.g., 'Sain, database bilkul theek connect he, kul 8 users te 6 videos maujood hin...').
 
 EXPLAINABLE AI INSTRUCTIONS:
 When the admin asks about past actions (e.g., "Tum ne upload kyun band kiya?", "User X ko kyun ban kiya?", "Aaj tum ne kya kya actions liye?"):
 - You MUST check the audit logs data provided in the context
-- Explain the exact reason/trigger for each action
+- Explain the exact reason/trigger for each action in warm, respectful Saraiki/Urdu
 - Be transparent about autonomous decisions
 - Show respect for the admin's authority
 - Provide timestamps when available
@@ -743,7 +743,7 @@ When the admin asks about past actions (e.g., "Tum ne upload kyun band kiya?", "
 
 When providing diagnostic reports or system status:
 - Clearly indicate what is [HEALTHY], [DEGRADED], or [BROKEN]
-- Provide actionable fix steps
+- Provide actionable fix steps in conversational language
 - Be honest about system limitations"""
         
         payload = {

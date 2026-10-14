@@ -121,7 +121,14 @@ export function AdminChat() {
 
   // Detect language from text (Urdu/Saraiki keywords)
   const detectLanguage = (text: string): 'ur' | 'en' => {
-    const urduKeywords = ['jani', 'sain', 'hai', 'karo', 'kia', 'nahi', 'theak', 'salaam', 'bhai', 'maine', 'tum', 'tumhare', 'mera', 'kuch', 'kar', 'dekho', 'check', 'sab', 'kiya', 'kyun', 'kaise', 'lega', 'lega', 'lega'];
+    const urduKeywords = [
+      'jani', 'sain', 'hai', 'karo', 'kia', 'nahi', 'theak', 'salaam', 'bhai', 
+      'maine', 'tum', 'tumhare', 'mera', 'kuch', 'kar', 'dekho', 'check', 'sab', 
+      'kiya', 'kyun', 'kaise', 'lega', 'kiven', 'payin', 'chalday', 'thaak', 
+      'ho', 'aay', 'gaay', 'je', 'jeh', 'wekh', 'sun', 'bol', 'aakh', 'khabar',
+      'khush', 'rab', 'rakha', 'khair', 'vich', 'ton', 'nu', 'da', 'de', 'paar',
+      'mut', 'jhoot', 'sach', 'dil', 'pyar', 'mohabbat', 'dost', 'yaar'
+    ];
     const lowerText = text.toLowerCase();
     
     // Check if any Urdu/Saraiki keywords are present
@@ -130,9 +137,11 @@ export function AdminChat() {
     return hasUrduKeywords ? 'ur' : 'en';
   };
 
-  // Strip markdown formatting for TTS
+  // Strip markdown formatting and JSON symbols for TTS
   const stripMarkdown = (text: string): string => {
     return text
+      // Remove JSON symbols
+      .replace(/[{}[\]"':_]/g, '')
       // Remove bold/italic markers
       .replace(/\*\*([^*]+)\*\*/g, '$1')
       .replace(/\*([^*]+)\*/g, '$1')

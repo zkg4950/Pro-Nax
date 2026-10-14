@@ -363,32 +363,18 @@ def text_to_speech():
             
             edge_voice = voice_map.get(language, voice_map['en'])
             
-            # Create SSML for natural Pakistani cadence
-            # Add rate and pitch adjustments for more natural speech
-            if language in ['ur', 'skr']:
-                # For Urdu/Saraiki, use slightly slower rate for clarity
-                ssml_text = f"""
-                <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{language}-PK">
-                    <voice name="{edge_voice}">
-                        <prosody rate="-5%" pitch="+0Hz">
-                            {text}
-                        </prosody>
-                    </voice>
-                </speak>
-                """
-            else:
-                # For other languages, use standard settings
-                ssml_text = f"""
-                <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{language}">
-                    <voice name="{edge_voice}">
-                        <prosody rate="0%" pitch="+0Hz">
-                            {text}
-                        </prosody>
-                    </voice>
-                </speak>
-                """
+            # Strip JSON symbols, markdown, and other non-spoken characters
+            clean_text = text
+            # Remove JSON symbols
+            clean_text = clean_text.replace('{', '').replace('}', '').replace('[', '').replace(']', '')
+            clean_text = clean_text.replace('"', '').replace("'", '').replace(':', '').replace('_', '')
+            # Remove markdown
+            clean_text = clean_text.replace('**', '').replace('*', '').replace('#', '').replace('```', '')
+            # Remove extra whitespace
+            clean_text = ' '.join(clean_text.split())
             
-            communicate = edge_tts.Communicate(ssml_text, edge_voice)
+            # Use edge_tts.Communicate with native rate and pitch parameters
+            communicate = edge_tts.Communicate(clean_text, edge_voice, rate="-5%", pitch="+0Hz")
             
             # Generate audio synchronously using edge-tts save method
             import tempfile
