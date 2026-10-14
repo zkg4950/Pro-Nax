@@ -24,13 +24,20 @@ CORS(app)
 
 # Supabase Configuration
 SUPABASE_URL = os.getenv("VITE_SUPABASE_URL") or os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("VITE_SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 # Validate Supabase configuration
 if not SUPABASE_URL:
-    print("[WARNING] SUPABASE_URL not configured. Please set VITE_SUPABASE_URL or SUPABASE_URL in your environment variables.")
+    print("[ERROR] SUPABASE_URL not configured. Please set VITE_SUPABASE_URL or SUPABASE_URL in your environment variables.")
+    print("[ERROR] Admin Brain Server cannot start without Supabase URL.")
+    exit(1)
+
 if not SUPABASE_SERVICE_ROLE_KEY:
-    print("[WARNING] SUPABASE_SERVICE_ROLE_KEY not configured. Please set SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY in your environment variables.")
+    print("[ERROR] SUPABASE_SERVICE_ROLE_KEY not configured.")
+    print("[ERROR] Admin operations require service role key for elevated privileges.")
+    print("[ERROR] Please set SUPABASE_SERVICE_ROLE_KEY in your environment variables.")
+    print("[ERROR] DO NOT use VITE_SUPABASE_ANON_KEY as fallback - it lacks admin permissions.")
+    exit(1)
 
 # Ollama Configuration
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")

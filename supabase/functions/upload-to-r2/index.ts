@@ -135,10 +135,27 @@ serve(async (req: Request) => {
     const R2_BUCKET_NAME = Deno.env.get('R2_BUCKET_NAME')
 
     if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET_NAME) {
+      console.error('[R2 Upload] Missing credentials:', {
+        hasAccountId: !!R2_ACCOUNT_ID,
+        hasAccessKeyId: !!R2_ACCESS_KEY_ID,
+        hasSecretKey: !!R2_SECRET_ACCESS_KEY,
+        hasBucketName: !!R2_BUCKET_NAME
+      })
+      
       return new Response(
-        JSON.stringify({ error: 'R2 credentials not configured' }),
+        JSON.stringify({ 
+          error: 'Cloudflare R2 storage not configured',
+          code: 'R2_NOT_CONFIGURED',
+          message: 'Video upload requires Cloudflare R2 credentials. Please configure the following environment variables in Supabase: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL',
+          missingCredentials: {
+            R2_ACCOUNT_ID: !!R2_ACCOUNT_ID,
+            R2_ACCESS_KEY_ID: !!R2_ACCESS_KEY_ID,
+            R2_SECRET_ACCESS_KEY: !!R2_SECRET_ACCESS_KEY,
+            R2_BUCKET_NAME: !!R2_BUCKET_NAME
+          }
+        }),
         { 
-          status: 500, 
+          status: 503, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
