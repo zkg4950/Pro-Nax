@@ -370,22 +370,27 @@ def text_to_speech():
             import re
             has_urdu_script = bool(re.search(r'[\u0600-\u06FF]', clean_text))
 
+            # 100% PAKISTANI/DESI VOICES ONLY - NO AMERICAN VOICES
             if has_urdu_script:
+                # Urdu script: Use Real Pakistani Female Voice (Uzma)
                 edge_voice = 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural'
-                # For Urdu script, use slightly slower rate for clarity
-                rate_param = "-5%"
-                pitch_param = "+0Hz"
-            elif language in ['ur', 'skr'] or any(kw in clean_text.lower() for kw in ['jani', 'sain', 'theek', 'kiven', 'hosi', 'meda', 'tusa', 'karo', 'kia', 'hai', 'main']):
-                # Subcontinental Roman voice: crystal clear pronunciation for Roman Urdu/Saraiki without robotic distortion
-                edge_voice = 'hi-IN-SwaraNeural' if voice == 'female' else 'hi-IN-MadhurNeural'
-                # Normal human speech rate for Roman Urdu
+                # Natural human speech rate for Urdu
                 rate_param = "+0%"
-                pitch_param = "+2Hz" if voice == 'female' else "-2Hz"
+                pitch_param = "+0Hz"
+            elif language in ['ur', 'skr'] or any(kw in clean_text.lower() for kw in ['jani', 'sain', 'theek', 'kiven', 'hosi', 'meda', 'tusa', 'karo', 'kia', 'hai', 'main', 'ho', 'aay', 'gaay', 'je', 'jeh', 'wekh', 'sun', 'bol', 'aakh', 'khabar', 'khush', 'rab', 'rakha', 'khair', 'vich', 'ton', 'nu', 'da', 'de', 'paar', 'mut', 'jhoot', 'sach', 'dil', 'pyar', 'mohabbat', 'dost', 'yaar']):
+                # Roman Urdu / Saraiki / English with Desi accent: Use Real Indian Female Voice (Swara)
+                # Swara naturally pronounces Roman Urdu/Saraiki words like "kiven o", "theek", "jani" with human South Asian accent
+                edge_voice = 'hi-IN-SwaraNeural' if voice == 'female' else 'hi-IN-MadhurNeural'
+                # Natural human speech rate - no robotic distortion
+                rate_param = "+0%"
+                pitch_param = "+0Hz"
             else:
-                edge_voice = 'en-US-JennyNeural' if voice == 'female' else 'en-US-GuyNeural'
-                # Natural English speech rate
-                rate_param = "+5%"
-                pitch_param = "+5Hz" if voice == 'female' else "-5Hz"
+                # Even for English, use Desi voice for consistency with Pakistani/Desi context
+                # Swara handles English with natural South Asian accent
+                edge_voice = 'hi-IN-SwaraNeural' if voice == 'female' else 'hi-IN-MadhurNeural'
+                # Natural human speech rate
+                rate_param = "+0%"
+                pitch_param = "+0Hz"
             
             # Use edge_tts.Communicate with natural human-like rate and pitch
             communicate = edge_tts.Communicate(clean_text, edge_voice, rate=rate_param, pitch=pitch_param)
