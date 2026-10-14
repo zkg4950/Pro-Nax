@@ -127,14 +127,24 @@ export function AdminChat() {
       'kiya', 'kyun', 'kaise', 'lega', 'kiven', 'payin', 'chalday', 'thaak', 
       'ho', 'aay', 'gaay', 'je', 'jeh', 'wekh', 'sun', 'bol', 'aakh', 'khabar',
       'khush', 'rab', 'rakha', 'khair', 'vich', 'ton', 'nu', 'da', 'de', 'paar',
-      'mut', 'jhoot', 'sach', 'dil', 'pyar', 'mohabbat', 'dost', 'yaar'
+      'mut', 'jhoot', 'sach', 'dil', 'pyar', 'mohabbat', 'dost', 'yaar',
+      'hain', 'thay', 'thi', 'aaye', 'gaye', 'jaye', 'laye',
+      'karein', 'karen', 'karun', 'dein', 'den', 'lein', 'len',
+      'se', 'mein', 'tujhe', 'mujhe', 'apna', 'apni', 'apne',
+      'ko', 'ka', 'ki', 'ke', 'ne', 'par', 'tak'
     ];
     const lowerText = text.toLowerCase();
     
     // Check if any Urdu/Saraiki keywords are present
     const hasUrduKeywords = urduKeywords.some(keyword => lowerText.includes(keyword));
     
-    return hasUrduKeywords ? 'ur' : 'en';
+    // Also check if the text is mostly Roman Urdu (has many Urdu words)
+    const wordCount = lowerText.split(' ').length;
+    const urduWordCount = urduKeywords.filter(kw => lowerText.includes(kw)).length;
+    const urduRatio = urduWordCount / wordCount;
+    
+    // If more than 30% of words are Urdu keywords, treat as Urdu
+    return (hasUrduKeywords && urduRatio > 0.3) ? 'ur' : 'en';
   };
 
   // Strip markdown formatting and JSON symbols for TTS
@@ -252,9 +262,17 @@ export function AdminChat() {
     // Use the matched voice's actual language so the browser doesn't drop the female voice
     utterance.lang = preferredVoice ? preferredVoice.lang : (detectedLanguage === 'ur' ? 'ur-PK' : 'en-US');
     
-    // Natural voice settings
-    utterance.pitch = voiceGender === 'female' ? 1.05 : 0.9;
-    utterance.rate = 0.85;
+    // Natural human-like voice settings
+    // Adjusted for more natural, human-like speech
+    if (detectedLanguage === 'ur') {
+        // For Urdu, slightly slower rate for clarity
+        utterance.pitch = voiceGender === 'female' ? 1.1 : 0.95;
+        utterance.rate = 0.9;
+    } else {
+        // For English, normal human speech rate
+        utterance.pitch = voiceGender === 'female' ? 1.15 : 0.85;
+        utterance.rate = 1.0;  // Normal human speech rate
+    }
     utterance.volume = 1.0;
     
     speechSynthesis.speak(utterance);

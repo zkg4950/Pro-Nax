@@ -368,14 +368,23 @@ def text_to_speech():
 
             if has_urdu_script:
                 edge_voice = 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural'
+                # For Urdu script, use slightly slower rate for clarity
+                rate_param = "-5%"
+                pitch_param = "+0Hz"
             elif language in ['ur', 'skr'] or any(kw in clean_text.lower() for kw in ['jani', 'sain', 'theek', 'kiven', 'hosi', 'meda', 'tusa', 'karo', 'kia', 'hai', 'main']):
                 # Subcontinental Roman voice: crystal clear pronunciation for Roman Urdu/Saraiki without robotic distortion
                 edge_voice = 'hi-IN-SwaraNeural' if voice == 'female' else 'hi-IN-MadhurNeural'
+                # Normal human speech rate for Roman Urdu
+                rate_param = "+0%"
+                pitch_param = "+2Hz" if voice == 'female' else "-2Hz"
             else:
                 edge_voice = 'en-US-JennyNeural' if voice == 'female' else 'en-US-GuyNeural'
+                # Natural English speech rate
+                rate_param = "+5%"
+                pitch_param = "+5Hz" if voice == 'female' else "-5Hz"
             
-            # Use edge_tts.Communicate with native rate and pitch parameters
-            communicate = edge_tts.Communicate(clean_text, edge_voice, rate="-5%", pitch="+0Hz")
+            # Use edge_tts.Communicate with natural human-like rate and pitch
+            communicate = edge_tts.Communicate(clean_text, edge_voice, rate=rate_param, pitch=pitch_param)
             
             # Generate audio synchronously using edge-tts save method
             import tempfile
