@@ -618,31 +618,402 @@ class SupabaseAdminTools:
             
         except Exception as e:
             return {"error": str(e)}
+    
+    def analyze_entire_codebase(self):
+        """Comprehensive Codebase Analysis - Full Permission to Analyze All Files"""
+        try:
+            import os
+            from datetime import datetime
+            
+            analysis_result = {
+                "scan_timestamp": datetime.now().isoformat(),
+                "files_analyzed": 0,
+                "files_scanned": [],  # Detailed list of all files scanned
+                "categories": {
+                    "python_backend": {"files": [], "issues": [], "improvements": []},
+                    "typescript_frontend": {"files": [], "issues": [], "improvements": []},
+                    "react_components": {"files": [], "issues": [], "improvements": []},
+                    "configuration": {"files": [], "issues": [], "improvements": []}
+                },
+                "critical_issues": [],
+                "recommendations": []
+            }
+            
+            # Scan project directory
+            project_root = os.path.dirname(os.path.abspath(__file__))
+            
+            # Analyze Python files
+            python_files = []
+            for root, dirs, files in os.walk(project_root):
+                # Skip node_modules, __pycache__, .git
+                dirs[:] = [d for d in dirs if d not in ['node_modules', '__pycache__', '.git', 'dist', 'build']]
+                
+                for file in files:
+                    if file.endswith('.py'):
+                        file_path = os.path.join(root, file)
+                        # Get relative path for display
+                        rel_path = os.path.relpath(file_path, project_root)
+                        python_files.append(file_path)
+                        analysis_result["files_scanned"].append({
+                            "file": rel_path,
+                            "type": "Python Backend",
+                            "status": "scanned"
+                        })
+                        analysis_result["files_analyzed"] += 1
+            
+            # Analyze Python code quality
+            for py_file in python_files:
+                try:
+                    with open(py_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    issues = []
+                    improvements = []
+                    rel_path = os.path.relpath(py_file, project_root)
+                    
+                    # Check for common issues
+                    if 'TODO' in content or 'FIXME' in content:
+                        issues.append("Contains TODO/FIXME comments")
+                    
+                    if 'print(' in content and 'admin_brain_server.py' not in py_file:
+                        issues.append("Contains print statements (should use logging)")
+                    
+                    if 'except:' in content or 'except Exception:' in content:
+                        if 'finally' not in content:
+                            improvements.append("Consider adding finally blocks for cleanup")
+                    
+                    if len(content) > 2000 and 'class ' not in content:
+                        improvements.append("Large file without classes - consider modularization")
+                    
+                    if issues or improvements:
+                        analysis_result["categories"]["python_backend"]["files"].append({
+                            "file": rel_path,
+                            "issues": issues,
+                            "improvements": improvements
+                        })
+                        analysis_result["categories"]["python_backend"]["issues"].extend(issues)
+                        analysis_result["categories"]["python_backend"]["improvements"].extend(improvements)
+                
+                except Exception as e:
+                    rel_path = os.path.relpath(py_file, project_root)
+                    analysis_result["categories"]["python_backend"]["issues"].append(f"Error reading {rel_path}: {str(e)}")
+            
+            # Analyze TypeScript/React files
+            ts_files = []
+            for root, dirs, files in os.walk(project_root):
+                dirs[:] = [d for d in dirs if d not in ['node_modules', '__pycache__', '.git', 'dist', 'build']]
+                
+                for file in files:
+                    if file.endswith(('.ts', '.tsx')):
+                        file_path = os.path.join(root, file)
+                        rel_path = os.path.relpath(file_path, project_root)
+                        ts_files.append(file_path)
+                        analysis_result["files_scanned"].append({
+                            "file": rel_path,
+                            "type": "TypeScript/React",
+                            "status": "scanned"
+                        })
+                        analysis_result["files_analyzed"] += 1
+            
+            # Analyze TypeScript/React code quality
+            for ts_file in ts_files:
+                try:
+                    with open(ts_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    issues = []
+                    improvements = []
+                    rel_path = os.path.relpath(ts_file, project_root)
+                    
+                    # Check for React component issues
+                    if ts_file.endswith('.tsx'):
+                        if 'useState' in content and 'useEffect' not in content:
+                            improvements.append("Consider adding useEffect for side effects")
+                        
+                        if 'any' in content:
+                            issues.append("Contains 'any' type - should use specific types")
+                        
+                        if 'console.log' in content:
+                            issues.append("Contains console.log statements")
+                        
+                        if content.count('export') == 0:
+                            improvements.append("Consider exporting component for reuse")
+                    
+                    # Check for TypeScript best practices
+                    if 'interface' not in content and 'type' not in content:
+                        improvements.append("Consider adding TypeScript interfaces/types")
+                    
+                    if issues or improvements:
+                        analysis_result["categories"]["typescript_frontend"]["files"].append({
+                            "file": rel_path,
+                            "issues": issues,
+                            "improvements": improvements
+                        })
+                        analysis_result["categories"]["typescript_frontend"]["issues"].extend(issues)
+                        analysis_result["categories"]["typescript_frontend"]["improvements"].extend(improvements)
+                
+                except Exception as e:
+                    rel_path = os.path.relpath(ts_file, project_root)
+                    analysis_result["categories"]["typescript_frontend"]["issues"].append(f"Error reading {rel_path}: {str(e)}")
+            
+            # UI-specific analysis
+            ui_files = [f for f in ts_files if 'components' in f.lower()]
+            for ui_file in ui_files:
+                try:
+                    with open(ui_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    rel_path = os.path.relpath(ui_file, project_root)
+                    issues = []
+                    improvements = []
+                    
+                    if 'src/components/admin' in ui_file:
+                        # Check admin component issues
+                        if 'className' not in content:
+                            issues.append("Missing className for styling")
+                        
+                        if 'aria-' not in content:
+                            improvements.append("Consider adding ARIA labels for accessibility")
+                    
+                    if issues or improvements:
+                        analysis_result["categories"]["react_components"]["files"].append({
+                            "file": rel_path,
+                            "issues": issues,
+                            "improvements": improvements
+                        })
+                
+                except Exception:
+                    pass
+            
+            # Generate recommendations
+            analysis_result["recommendations"] = [
+                {
+                    "priority": "HIGH",
+                    "category": "Code Quality",
+                    "suggestion": "Fix all print statements in Python files (replace with logging)",
+                    "impact": "Better production debugging"
+                },
+                {
+                    "priority": "MEDIUM",
+                    "category": "TypeScript",
+                    "suggestion": "Remove 'any' types and use specific TypeScript types",
+                    "impact": "Better type safety and IDE support"
+                },
+                {
+                    "priority": "MEDIUM",
+                    "category": "React",
+                    "suggestion": "Add ARIA labels to UI components for accessibility",
+                    "impact": "Better accessibility compliance"
+                },
+                {
+                    "priority": "LOW",
+                    "category": "Code Organization",
+                    "suggestion": "Resolve TODO/FIXME comments",
+                    "impact": "Clean codebase"
+                }
+            ]
+            
+            return analysis_result
+            
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def check_database_schema_health(self):
+        """Layer 1: Database Schema & Trigger Health Checker"""
+        try:
+            required_tables = [
+                'profiles', 'videos', 'comments', 'video_likes', 
+                'app_settings', 'audit_logs', 'reports', 'strikes'
+            ]
+            
+            healthy_tables = []
+            missing_tables = []
+            
+            for table in required_tables:
+                try:
+                    response = requests.get(
+                        f"{self.url}/rest/v1/{table}?select=id&limit=1",
+                        headers=self.headers
+                    )
+                    if response.status_code == 200:
+                        healthy_tables.append(table)
+                    else:
+                        missing_tables.append(table)
+                except Exception:
+                    missing_tables.append(table)
+            
+            # Check for critical RPCs/triggers
+            critical_rpcs = ['supervisor_get_system_health']
+            healthy_rpcs = []
+            missing_rpcs = []
+            
+            for rpc in critical_rpcs:
+                try:
+                    response = requests.post(
+                        f"{self.url}/rest/v1/rpc/{rpc}",
+                        headers=self.headers,
+                        json={},
+                        timeout=5
+                    )
+                    if response.status_code == 200:
+                        healthy_rpcs.append(rpc)
+                    else:
+                        missing_rpcs.append(rpc)
+                except Exception:
+                    missing_rpcs.append(rpc)
+            
+            schema_status = "OPTIMAL" if len(missing_tables) == 0 and len(missing_rpcs) == 0 else "DEGRADED"
+            
+            return {
+                "healthy_tables": healthy_tables,
+                "missing_tables": missing_tables,
+                "healthy_rpcs": healthy_rpcs,
+                "missing_rpcs": missing_rpcs,
+                "schema_status": schema_status,
+                "total_required": len(required_tables),
+                "total_healthy": len(healthy_tables)
+            }
+            
+        except Exception as e:
+            return {"error": str(e), "schema_status": "BROKEN"}
+    
+    def triage_pending_moderation_queue(self, limit=10):
+        """Layer 2: Automated Moderation Queue Triaging"""
+        try:
+            # Fetch pending reports or flagged videos
+            reports_response = requests.get(
+                f"{self.url}/rest/v1/reports?select=*&status=eq.pending&order=created_at desc&limit={limit}",
+                headers=self.headers
+            )
+            
+            triaged_items = []
+            
+            if reports_response.status_code == 200:
+                reports = reports_response.json()
+                
+                for report in reports:
+                    violation_confidence = report.get('violation_confidence', 0)
+                    report_id = report.get('id')
+                    
+                    if violation_confidence > 0.85:
+                        # Stage for admin approval - do NOT delete autonomously
+                        update_response = requests.patch(
+                            f"{self.url}/rest/v1/reports?id=eq.{report_id}",
+                            headers=self.headers,
+                            json={
+                                "status": "pending_admin_approval",
+                                "suggested_action": "review_and_decide",
+                                "triaged_by": "AI_AUTONOMOUS",
+                                "triaged_at": "now()"
+                            }
+                        )
+                        
+                        if update_response.status_code in [200, 204]:
+                            triaged_items.append({
+                                "report_id": report_id,
+                                "violation_confidence": violation_confidence,
+                                "action": "staged_for_approval",
+                                "reason": "High confidence violation detected"
+                            })
+            
+            # Log the triage action to audit_logs
+            if triaged_items:
+                audit_payload = {
+                    "action": "AI_MODERATION_TRIAGE",
+                    "target": "moderation_queue",
+                    "reason": f"Triaged {len(triaged_items)} items for admin approval",
+                    "actor": "AI_AUTONOMOUS",
+                    "metadata": {
+                        "triaged_count": len(triaged_items),
+                        "items": triaged_items
+                    },
+                    "created_at": "now()"
+                }
+                
+                requests.post(
+                    f"{self.url}/rest/v1/audit_logs",
+                    headers=self.headers,
+                    json=audit_payload
+                )
+            
+            return {
+                "triaged_count": len(triaged_items),
+                "items": triaged_items,
+                "message": f"Sain, maine {len(triaged_items)} items triage kiye hain admin approval ke liye"
+            }
+            
+        except Exception as e:
+            return {"error": str(e)}
+    
+    def audit_app_routes_and_views(self):
+        """Layer 3: App UI & Route Diagnostic Engine"""
+        try:
+            # Check error rates from audit_logs grouped by route
+            # Calculate error rate over last 24 hours
+            from datetime import datetime, timedelta
+            
+            cutoff_time = (datetime.now() - timedelta(hours=24)).isoformat()
+            
+            # Fetch recent audit logs with error context
+            logs_response = requests.get(
+                f"{self.url}/rest/v1/audit_logs?select=*&created_at=gte.{cutoff_time}&order=created_at desc",
+                headers=self.headers
+            )
+            
+            route_errors = {}
+            total_errors = 0
+            total_requests = 0
+            
+            if logs_response.status_code == 200:
+                logs = logs_response.json()
+                
+                for log in logs:
+                    route = log.get('metadata', {}).get('route', 'unknown')
+                    if log.get('action') == 'ERROR' or 'error' in str(log.get('reason', '')).lower():
+                        route_errors[route] = route_errors.get(route, 0) + 1
+                        total_errors += 1
+                    total_requests += 1
+            
+            # Identify routes with elevated error rate (> 5%)
+            problematic_routes = []
+            for route, error_count in route_errors.items():
+                route_total = route_errors.get(route, 0)
+                if total_requests > 0:
+                    error_rate = (error_count / total_requests) * 100
+                    if error_rate > 5:
+                        problematic_routes.append({
+                            "route": route,
+                            "error_count": error_count,
+                            "error_rate": round(error_rate, 2),
+                            "status": "ELEVATED"
+                        })
+            
+            # Generate human-readable advice
+            advice = []
+            if problematic_routes:
+                for route_info in problematic_routes:
+                    route = route_info['route']
+                    advice.append(f"Route {route} has {route_info['error_rate']}% error rate - check UI triggers and API handlers")
+            else:
+                advice.append("Sab routes theek chal rahe hain, koi elevated error nahi hai")
+            
+            return {
+                "total_errors": total_errors,
+                "total_requests": total_requests,
+                "overall_error_rate": round((total_errors / total_requests * 100) if total_requests > 0 else 0, 2),
+                "problematic_routes": problematic_routes,
+                "advice": advice,
+                "message": "Sain, route health check complete"
+            }
+            
+        except Exception as e:
+            return {"error": str(e)}
 
 # Initialize tools
 supabase_tools = SupabaseAdminTools()
 
 def call_ollama(messages, system_prompt=None):
     """Call Ollama API for chat completion with fallback to Groq"""
-    message_lower = messages[-1].get("content", "").lower() if messages else ""
-    
-    # First check if we need to call real Supabase APIs
-    if "database" in message_lower or "db" in message_lower:
-        try:
-            # Get system health which includes database info
-            health = supabase_tools.get_system_health()
-            return f"Jani, maine database check kiya hai. System health: {health}"
-        except Exception as e:
-            return f"Jani, database check mein error aa gaya hai: {str(e)}"
-    
-    elif "user" in message_lower and "count" in message_lower:
-        try:
-            # Get user count
-            users = supabase_tools.get_users(limit=10)
-            return f"Jani, total users hain: {users.get('count', 0)}"
-        except Exception as e:
-            return f"Jani, user count mein error aa gaya hai: {str(e)}"
-    
     # Check Ollama availability and select model
     ollama_available, available_models = check_ollama_available()
     if not ollama_available:
@@ -680,10 +1051,24 @@ CAPABILITIES (When admin asks what you can do):
 3. Control app features (upload, live streaming kill-switches)
 4. Analyze videos, views, earnings and audit logs
 5. Autonomous crash prevention & real-time alerts
+6. Database schema and table health check (check_database_schema_health)
+7. Moderation queue triaging for pending content (triage_pending_moderation_queue)
+8. Route & UI health analytics (audit_app_routes_and_views)
+9. FULL CODEBASE ANALYSIS - I can analyze every file in your app (Python, TypeScript, React, Configuration) to find issues, bugs, and suggest improvements (analyze_entire_codebase)
+   - WHEN ANALYZING CODE: Always list ALL files scanned in a clear, numbered list
+   - Tell the admin exactly which files I checked (e.g., "Sain, maine in files check kiye: 1. admin_brain_server.py, 2. ai_gateway.py, 3. src/components/admin/AdminChat.tsx...")
+
+SAFETY GUARDRAILS:
+- Destructive actions (dropping tables, permanent deletes) are strictly blocked
+- Only staging, toggles, bans, and diagnostics are allowed autonomously
+- High-confidence violations are staged for 1-click admin approval, never auto-deleted
+- Code analysis is READ-ONLY - I will only suggest improvements, never modify code without permission
 
 EXPLAINABLE AI & DIAGNOSTICS:
 - Always check context for audit logs when asked why something was toggled or banned.
-- Clearly flag statuses as [HEALTHY], [DEGRADED], or [BROKEN] with friendly guidance."""
+- Clearly flag statuses as [HEALTHY], [DEGRADED], or [BROKEN] with friendly guidance.
+- When analyzing code, I will explain issues in simple language and suggest concrete fixes.
+- ALWAYS list the files I scanned when doing code analysis."""
         
         # Inject system prompt into messages array
         messages_with_system = [{"role": "system", "content": simple_prompt}] + simplified_messages
@@ -749,10 +1134,24 @@ CAPABILITIES (When admin asks what you can do):
 3. Control app features (upload, live streaming kill-switches)
 4. Analyze videos, views, earnings and audit logs
 5. Autonomous crash prevention & real-time alerts
+6. Database schema and table health check (check_database_schema_health)
+7. Moderation queue triaging for pending content (triage_pending_moderation_queue)
+8. Route & UI health analytics (audit_app_routes_and_views)
+9. FULL CODEBASE ANALYSIS - I can analyze every file in your app (Python, TypeScript, React, Configuration) to find issues, bugs, and suggest improvements (analyze_entire_codebase)
+   - WHEN ANALYZING CODE: Always list ALL files scanned in a clear, numbered list
+   - Tell the admin exactly which files I checked (e.g., "Sain, maine in files check kiye: 1. admin_brain_server.py, 2. ai_gateway.py, 3. src/components/admin/AdminChat.tsx...")
+
+SAFETY GUARDRAILS:
+- Destructive actions (dropping tables, permanent deletes) are strictly blocked
+- Only staging, toggles, bans, and diagnostics are allowed autonomously
+- High-confidence violations are staged for 1-click admin approval, never auto-deleted
+- Code analysis is READ-ONLY - I will only suggest improvements, never modify code without permission
 
 EXPLAINABLE AI & DIAGNOSTICS:
 - Always check context for audit logs when asked why something was toggled or banned.
-- Clearly flag statuses as [HEALTHY], [DEGRADED], or [BROKEN] with friendly guidance."""
+- Clearly flag statuses as [HEALTHY], [DEGRADED], or [BROKEN] with friendly guidance.
+- When analyzing code, I will explain issues in simple language and suggest concrete fixes.
+- ALWAYS list the files I scanned when doing code analysis."""
         
         # Inject system prompt into messages array
         messages_with_system = [{"role": "system", "content": simple_prompt}] + simplified_messages
@@ -823,7 +1222,6 @@ def detect_intent_and_execute(message, video_frame=None):
     # Get videos
     if "videos" in message_lower or "video" in message_lower:
         videos = supabase_tools.get_videos(limit=50)
-        print(f"DEBUG: Videos response: {videos}")
         video_count = len(videos.get('videos', [])) if 'videos' in videos else videos.get('count', 0)
         actions.append({
             "type": "Video Data Retrieved",
@@ -883,6 +1281,56 @@ def detect_intent_and_execute(message, video_frame=None):
             "type": "App Growth & UI Analysis",
             "description": "Analyzed app metrics and generated recommendations",
             "data": analysis
+        })
+    
+    # Database schema health check
+    if "schema" in message_lower or "table" in message_lower or "database structure" in message_lower:
+        schema_health = supabase_tools.check_database_schema_health()
+        actions.append({
+            "type": "Database Schema Health Check",
+            "description": "Checked database schema and table health",
+            "data": schema_health,
+            "is_autonomous": True
+        })
+    
+    # Moderation queue triaging
+    if "moderation" in message_lower or "queue" in message_lower or "triage" in message_lower or "flag" in message_lower:
+        triage_result = supabase_tools.triage_pending_moderation_queue(limit=10)
+        actions.append({
+            "type": "Moderation Queue Triaged",
+            "description": "Triaged pending moderation items for admin approval",
+            "data": triage_result,
+            "is_autonomous": True,
+            "badge": "AI AUTONOMOUS ACTION"
+        })
+    
+    # Route and UI health analytics
+    if "route" in message_lower or "ui error" in message_lower or "page error" in message_lower or "route health" in message_lower:
+        route_health = supabase_tools.audit_app_routes_and_views()
+        actions.append({
+            "type": "Route & UI Health Analytics",
+            "description": "Analyzed route error rates and UI health",
+            "data": route_health,
+            "is_autonomous": True
+        })
+    
+    # Full codebase analysis
+    if "code" in message_lower and ("analyze" in message_lower or "scan" in message_lower or "check" in message_lower or "review" in message_lower or "masla" in message_lower or "issue" in message_lower or "better" in message_lower):
+        code_analysis = supabase_tools.analyze_entire_codebase()
+        
+        # Format files scanned list for AI to present to admin
+        files_list_str = ""
+        if code_analysis.get("files_scanned"):
+            files_list_str = "\n\nFILES SCANNED:\n"
+            for i, file_info in enumerate(code_analysis["files_scanned"], 1):
+                files_list_str += f"{i}. {file_info['file']} ({file_info['type']})\n"
+        
+        actions.append({
+            "type": "Full Codebase Analysis",
+            "description": f"Analyzed {code_analysis.get('files_analyzed', 0)} files for issues and improvements{files_list_str}",
+            "data": code_analysis,
+            "is_autonomous": True,
+            "badge": "AI AUTONOMOUS ACTION"
         })
     
     # Ban user (requires confirmation in real scenario)
