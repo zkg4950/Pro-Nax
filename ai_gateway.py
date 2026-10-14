@@ -352,17 +352,6 @@ def text_to_speech():
             )
             import asyncio
             
-            # Map language and voice to Edge-TTS voices with Pakistani neural voices
-            voice_map = {
-                'skr': 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural',
-                'ur': 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural',
-                'ar': 'ar-SA-ZariyahNeural' if voice == 'female' else 'ar-SA-HamedNeural',
-                'hi': 'hi-IN-SwaraNeural' if voice == 'female' else 'hi-IN-MadhurNeural',
-                'en': 'en-US-JennyNeural' if voice == 'female' else 'en-US-GuyNeural',
-            }
-            
-            edge_voice = voice_map.get(language, voice_map['en'])
-            
             # Strip JSON symbols, markdown, and other non-spoken characters
             clean_text = text
             # Remove JSON symbols
@@ -372,6 +361,18 @@ def text_to_speech():
             clean_text = clean_text.replace('**', '').replace('*', '').replace('#', '').replace('```', '')
             # Remove extra whitespace
             clean_text = ' '.join(clean_text.split())
+            
+            # Check if text contains actual Arabic/Urdu script (Nastaliq)
+            import re
+            has_urdu_script = bool(re.search(r'[\u0600-\u06FF]', clean_text))
+
+            if has_urdu_script:
+                edge_voice = 'ur-PK-UzmaNeural' if voice == 'female' else 'ur-PK-AsadNeural'
+            elif language in ['ur', 'skr'] or any(kw in clean_text.lower() for kw in ['jani', 'sain', 'theek', 'kiven', 'hosi', 'meda', 'tusa', 'karo', 'kia', 'hai', 'main']):
+                # Subcontinental Roman voice: crystal clear pronunciation for Roman Urdu/Saraiki without robotic distortion
+                edge_voice = 'hi-IN-SwaraNeural' if voice == 'female' else 'hi-IN-MadhurNeural'
+            else:
+                edge_voice = 'en-US-JennyNeural' if voice == 'female' else 'en-US-GuyNeural'
             
             # Use edge_tts.Communicate with native rate and pitch parameters
             communicate = edge_tts.Communicate(clean_text, edge_voice, rate="-5%", pitch="+0Hz")

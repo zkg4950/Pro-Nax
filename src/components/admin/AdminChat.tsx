@@ -249,7 +249,8 @@ export function AdminChat() {
     }
     
     // Set language for better pronunciation
-    utterance.lang = detectedLanguage === 'ur' ? 'ur-PK' : 'en-US';
+    // Use the matched voice's actual language so the browser doesn't drop the female voice
+    utterance.lang = preferredVoice ? preferredVoice.lang : (detectedLanguage === 'ur' ? 'ur-PK' : 'en-US');
     
     // Natural voice settings
     utterance.pitch = voiceGender === 'female' ? 1.05 : 0.9;
