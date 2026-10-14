@@ -224,40 +224,25 @@ export function AdminChat() {
     
     // Try to find the best voice based on gender and language
     const preferredVoice = voices.find(voice => {
-      if (detectedLanguage === 'ur') {
-        // For Urdu, prefer Pakistani voices
-        if (voiceGender === 'female') {
-          return voice.lang === 'ur-PK' || 
-                 voice.name.includes('Uzma') ||
-                 voice.name.includes('Urdu') ||
-                 voice.name.includes('Pakistani');
-        } else {
-          return voice.lang === 'ur-PK' || 
-                 voice.name.includes('Asad') ||
-                 voice.name.includes('Urdu') ||
-                 voice.name.includes('Pakistani');
-        }
+      const name = voice.name.toLowerCase();
+      const lang = voice.lang.toLowerCase();
+
+      if (voiceGender === 'female') {
+        // 1. First priority: Urdu / Pakistani female
+        if (lang.includes('ur') || name.includes('uzma')) return true;
+        // 2. Second priority: Hindi / Subcontinent female (clear Roman pronunciations)
+        if (lang.includes('hi') || name.includes('swara') || name.includes('kalpana') || name.includes('heera')) return true;
+        // 3. Third priority: Any natural female voice (Zira, Aria, Jenny)
+        if (name.includes('zira') || name.includes('aria') || name.includes('female') || name.includes('natural')) return true;
+        return false;
       } else {
-        // For English, use existing logic
-        if (voiceGender === 'female') {
-          return (voice.name.includes('Google') && voice.name.includes('Female') ||
-                 voice.name.includes('Microsoft Zira') ||
-                 voice.name.includes('Microsoft Aria') ||
-                 voice.name.includes('Microsoft Heera') ||
-                 voice.name.includes('Microsoft Kalpana') ||
-                 voice.name.includes('Samantha') ||
-                 voice.name.includes('Victoria') ||
-                 voice.name.includes('Female') || 
-                 voice.name.includes('female'));
-        } else {
-          return (voice.name.includes('Microsoft David') ||
-                 voice.name.includes('Microsoft Mark') ||
-                 voice.name.includes('Google') && voice.name.includes('Male') ||
-                 voice.name.includes('Male') || 
-                 voice.name.includes('male'));
-        }
+        // Male voice search
+        if (lang.includes('ur') || name.includes('asad')) return true;
+        if (lang.includes('hi') || name.includes('madhur')) return true;
+        if (name.includes('david') || name.includes('mark') || name.includes('male')) return true;
+        return false;
       }
-    });
+    }) || voices.find(v => voiceGender === 'female' ? v.name.toLowerCase().includes('female') || v.name.includes('Zira') : true);
     
     if (preferredVoice) {
       utterance.voice = preferredVoice;
