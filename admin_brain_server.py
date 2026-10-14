@@ -1015,6 +1015,28 @@ Answer the admin's query naturally, in a friendly and helpful tone (use Roman Ur
             "response": f"Sorry, I encountered an error: {str(e)}"
         }), 500
 
+@app.route('/', methods=['GET'])
+def index():
+    """Root endpoint with service information"""
+    return jsonify({
+        "service": "ProNax AI Admin Brain Server",
+        "version": "2.0.0",
+        "description": "Autonomous AI Admin with Explainable Decision-Making",
+        "endpoints": {
+            "POST /api/admin/chat": "Chat with AI Admin Brain",
+            "GET /health": "Health check endpoint"
+        },
+        "features": [
+            "Feature Kill-Switch & Autonomous Control",
+            "Explainable AI with Audit Logs",
+            "System Health Diagnostics",
+            "App Growth & UI Recommendations"
+        ],
+        "model": OLLAMA_MODEL,
+        "ollama_url": OLLAMA_BASE_URL,
+        "supabase_configured": bool(SUPABASE_URL)
+    })
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
