@@ -43,7 +43,10 @@ if not SUPABASE_SERVICE_ROLE_KEY:
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 OLLAMA_FALLBACK_MODEL = os.getenv("OLLAMA_FALLBACK_MODEL", "tinyllama")
-OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "180"))  # Increased default to 180 seconds
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "60"))  # Optimized for faster response
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))  # Context window size
+OLLAMA_NUM_GPU = int(os.getenv("OLLAMA_NUM_GPU", "1"))  # GPU acceleration
+OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.7"))  # Response randomness
 
 # Groq Configuration (fallback)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
