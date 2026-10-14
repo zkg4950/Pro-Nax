@@ -31,6 +31,16 @@ if not SUPABASE_SERVICE_ROLE_KEY:
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 OLLAMA_FALLBACK_MODEL = os.getenv("OLLAMA_FALLBACK_MODEL", "tinyllama")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "60"))
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
+OLLAMA_NUM_GPU = int(os.getenv("OLLAMA_NUM_GPU", "1"))
+OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.7"))
+
+# CrewAI Configuration
+CREWAI_API_KEY = os.getenv("CREWAI_API_KEY", "crewai_local")
+CREWAI_VERBOSE = os.getenv("CREWAI_VERBOSE", "true").lower() == "true"
+CREWAI_MEMORY = os.getenv("CREWAI_MEMORY", "false").lower() == "true"
+CREWAI_PROCESS = os.getenv("CREWAI_PROCESS", "sequential")
 
 # Use configured model for better tool support
 llm = f"ollama/{OLLAMA_MODEL}"
@@ -384,9 +394,9 @@ admin_decision_task = Task(
 admin_crew = Crew(
     agents=[admin_brain, system_monitor, user_manager, content_moderator, security_agent, analytics_agent, storage_manager],
     tasks=[health_check_task, user_analysis_task, content_review_task, security_assessment_task, analytics_analysis_task, storage_management_task, admin_decision_task],
-    verbose=True,
-    memory=False,
-    process="sequential"
+    verbose=CREWAI_VERBOSE,
+    memory=CREWAI_MEMORY,
+    process=CREWAI_PROCESS
 )
 
 def run_full_admin_check():
