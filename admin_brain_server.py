@@ -48,9 +48,9 @@ OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))  # Context window size
 OLLAMA_NUM_GPU = int(os.getenv("OLLAMA_NUM_GPU", "1"))  # GPU acceleration
 OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.7"))  # Response randomness
 
-# Groq Configuration (fallback)
+# Groq Configuration (PRIMARY LLM for millisecond response speed)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")  # Ultra-fast 500 tokens/sec
 
 # Check Ollama availability
 def check_ollama_available():
@@ -1083,6 +1083,7 @@ EXPLAINABLE AI & DIAGNOSTICS:
         # Inject system prompt into messages array
         messages_with_system = [{"role": "system", "content": simple_prompt}] + simplified_messages
         
+        # FAST CPU PARAMETERS: Reduced for millisecond response on CPU
         payload = {
             "model": selected_model,
             "messages": messages_with_system,
@@ -1090,14 +1091,15 @@ EXPLAINABLE AI & DIAGNOSTICS:
             "options": {
                 "temperature": 0.7,
                 "top_p": 0.9,
-                "num_predict": 1024
+                "num_predict": 200,  # Reduced from 1024 to 200 for 5x faster CPU response
+                "num_ctx": 1024  # Reduced from 4096 to 1024 for faster context window
             }
         }
-        
+
         response = requests.post(
             f"{OLLAMA_BASE_URL}/api/chat",
             json=payload,
-            timeout=OLLAMA_TIMEOUT  # Increased timeout to 180 seconds
+            timeout=60  # Reduced from 180 to 60 seconds
         )
         
         if response.status_code == 200:
@@ -1120,7 +1122,7 @@ EXPLAINABLE AI & DIAGNOSTICS:
         return f"Jani, Ollama connection error: {str(e)}. Server slow hai ya Ollama chal nahi raha."
 
 def call_groq(messages, system_prompt=None):
-    """Call Groq API as fallback when Ollama is slow or unavailable"""
+    """Call Groq API as PRIMARY LLM for millisecond response speed (500 tokens/sec)"""
     if not GROQ_API_KEY:
         return "Jani, Groq API key not configured. Please set GROQ_API_KEY environment variable."
     
@@ -1449,8 +1451,11 @@ Answer the admin's query naturally, in a friendly and helpful tone (use Roman Ur
                 "content": enhanced_system_prompt
             })
         
-        # Get response from Ollama
-        response = call_ollama(messages, system_prompt)
+        # Get response from Groq (PRIMARY for millisecond speed) or Ollama (fallback)
+        if GROQ_API_KEY:
+            response = call_groq(messages, system_prompt)
+        else:
+            response = call_ollama(messages, system_prompt)
         
         # Save conversation to memory
         save_conversation(message, response, str(actions))
@@ -1480,6 +1485,171 @@ Answer the admin's query naturally, in a friendly and helpful tone (use Roman Ur
             "response": f"Sorry, I encountered an error: {str(e)}"
         }), 500
 
+@app.route('/api/admin/chat/stream', methods=['POST'])
+def chat_stream():
+    """Handle chat requests with Server-Sent Events streaming for word-by-word real-time display"""
+    try:
+        data = request.json
+        message = data.get('message', '')
+        conversation_history = data.get('conversationHistory', [])
+        system_prompt = data.get('systemPrompt')
+        video_frame = data.get('videoFrame')
+
+        # Get relevant memories from database
+        relevant_memories = get_relevant_memories(message, limit=5)
+
+        # Check if admin is asking about past actions
+        message_lower = message.lower()
+        audit_context = ""
+        if any(keyword in message_lower for keyword in ["kyun", "kya", "kiya", "why", "what", "audit", "log", "action", "ban", "band", "suspension"]):
+            audit_logs = supabase_tools.query_ai_audit_logs(limit=5)
+            if audit_logs.get("logs"):
+                audit_context = "\n\nRECENT AI AUTONOMOUS ACTIONS (for explainability):\n"
+                for log in audit_logs["logs"]:
+                    audit_context += f"- Action: {log['action']}, Target: {log['target']}, Reason: {log['reason']}, Time: {log['timestamp']}\n"
+
+        # Build messages
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        if relevant_memories:
+            memory_context = "\n\nRELEVANT MEMORIES (I remember these):\n"
+            for mem in relevant_memories:
+                memory_context += f"- {mem['content']} (from {mem['category']})\n"
+            messages.append({"role": "system", "content": memory_context})
+        if audit_context:
+            messages.append({"role": "system", "content": audit_context})
+        for msg in conversation_history:
+            messages.append({"role": msg.get('role', 'user'), "content": msg.get('content', '')})
+        messages.append({"role": "user", "content": message})
+
+        # Detect and execute actions
+        actions = detect_intent_and_execute(message, video_frame)
+
+        # Build database context
+        db_data_description = ""
+        if actions:
+            for action in actions:
+                if action.get("type") == "Video Data Retrieved":
+                    video_count = action.get("data", {}).get("count", 0)
+                    db_data_description = f"Database real-time data: Total videos uploaded = {video_count}."
+                elif action.get("type") == "User Data Retrieved":
+                    user_count = action.get("data", {}).get("count", 0)
+                    db_data_description = f"Database real-time data: Total registered users = {user_count}."
+        if db_data_description:
+            enhanced_system_prompt = f"""You are ProNax AI Admin Brain connected to a live Supabase database.
+Here is the live data fetched for the current query: {db_data_description}
+Answer the admin's query naturally, in a friendly and helpful tone (use Roman Urdu if they spoke it), providing the exact factual figures above if available."""
+            messages.append({"role": "system", "content": enhanced_system_prompt})
+
+        # Get response from Groq (streaming) or Ollama (non-streaming fallback)
+        if GROQ_API_KEY:
+            # Groq streaming
+            def generate():
+                try:
+                    simplified_messages = messages[-5:] if len(messages) > 5 else messages
+                    simple_prompt = """You are the ProNax AI Admin Companion (Noor / Hamza). You warmly speak fluent Saraiki and Roman Urdu. Address the admin respectfully as 'Sain' or 'Jani'.
+
+LANGUAGE INSTRUCTIONS:
+|- When addressed in Saraiki (e.g., 'tusa meda kia kam kar skdy wy', 'sain kiven ho', 'hukam karo'), reply in sweet, authentic Saraiki (e.g., 'Sain, main tuhaday wastey boht sary kam kar sakdi aan...', 'Meda kam he tuhadi poori app di dekh-bhal karna').
+|- When addressed in Roman Urdu, reply in sweet conversational Roman Urdu.
+|- ALWAYS finish your thoughts and complete all sentences. Never cut off abruptly.
+
+STRICT FORMATTING RULES:
+|- Never output raw Python dictionaries, brackets {}, colons, or JSON in spoken sentences.
+|- When describing system health, users, or videos, describe them in sweet natural spoken words.
+
+CAPABILITIES (When admin asks what you can do):
+1. Manage users, bans, permissions
+2. Monitor system health, database & R2 storage
+3. Control app features (upload, live streaming kill-switches)
+4. Analyze videos, views, earnings and audit logs
+5. Autonomous crash prevention & real-time alerts
+6. Database schema and table health check (check_database_schema_health)
+7. Moderation queue triaging for pending content (triage_pending_moderation_queue)
+8. Route & UI health analytics (audit_app_routes_and_views)
+9. FULL CODEBASE ANALYSIS - I can analyze every file in your app (Python, TypeScript, React, Configuration) to find issues, bugs, and suggest improvements (analyze_entire_codebase)
+   - WHEN ANALYZING CODE: Always list ALL files scanned in a clear, numbered list
+   - Tell the admin exactly which files I checked (e.g., "Sain, maine in files check kiye: 1. admin_brain_server.py, 2. ai_gateway.py, 3. src/components/admin/AdminChat.tsx...")
+
+SAFETY GUARDRAILS:
+|- Destructive actions (dropping tables, permanent deletes) are strictly blocked
+|- Only staging, toggles, bans, and diagnostics are allowed autonomously
+|- High-confidence violations are staged for 1-click admin approval, never auto-deleted
+|- Code analysis is READ-ONLY - I will suggest improvements, never modify code without permission
+
+EXPLAINABLE AI & DIAGNOSTICS:
+|- Always check context for audit logs when asked why something was toggled or banned.
+|- Clearly flag statuses as [HEALTHY], [DEGRADED], or [BROKEN] with friendly guidance.
+|- When analyzing code, I will explain issues in simple language and suggest concrete fixes.
+|- ALWAYS list the files I scanned when doing code analysis."""
+
+                    messages_with_system = [{"role": "system", "content": simple_prompt}] + simplified_messages
+
+                    payload = {
+                        "model": GROQ_MODEL,
+                        "messages": messages_with_system,
+                        "temperature": 0.7,
+                        "max_tokens": 1024,
+                        "stream": True
+                    }
+
+                    response = requests.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {GROQ_API_KEY}",
+                            "Content-Type": "application/json"
+                        },
+                        json=payload,
+                        stream=True,
+                        timeout=60
+                    )
+
+                    if response.status_code == 200:
+                        for line in response.iter_lines():
+                            if line:
+                                line_str = line.decode('utf-8')
+                                if line_str.startswith('data: '):
+                                    data_str = line_str[6:]
+                                    if data_str == '[DONE]':
+                                        break
+                                    try:
+                                        data_json = json.loads(data_str)
+                                        token = data_json.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                        if token:
+                                            yield f"data: {json.dumps({'token': token})}\n\n"
+                                    except:
+                                        pass
+
+                    # Send actions at the end
+                    yield f"data: {json.dumps({'actions': actions, 'done': True})}\n\n"
+
+                    # Save conversation to memory
+                    full_response = ""
+                    # (Note: In streaming mode, we save after full response is assembled client-side)
+                    save_conversation(message, "[STREAMING RESPONSE]", str(actions))
+
+                except Exception as e:
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+            return Response(generate(), mimetype='text/event-stream')
+        else:
+            # Ollama fallback (non-streaming)
+            response = call_ollama(messages, system_prompt)
+            save_conversation(message, response, str(actions))
+            return jsonify({
+                "response": response,
+                "actions": actions,
+                "memories_used": len(relevant_memories),
+                "timestamp": datetime.now().isoformat()
+            })
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "response": f"Sorry, I encountered an error: {str(e)}"
+        }), 500
+
 @app.route('/', methods=['GET'])
 def index():
     """Root endpoint with service information"""
@@ -1488,7 +1658,8 @@ def index():
         "version": "2.0.0",
         "description": "Autonomous AI Admin with Explainable Decision-Making",
         "endpoints": {
-            "POST /api/admin/chat": "Chat with AI Admin Brain",
+            "POST /api/admin/chat": "Chat with AI Admin Brain (non-streaming)",
+            "POST /api/admin/chat/stream": "Chat with AI Admin Brain (streaming - word-by-word)",
             "GET /health": "Health check endpoint"
         },
         "features": [
