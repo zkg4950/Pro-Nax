@@ -1,2 +1,0 @@
-This file is used in the CLI version printout to detect if it's a local installation or not.
-This depends on this file not being distributed!
